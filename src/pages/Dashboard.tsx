@@ -1,219 +1,180 @@
-import React, { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import React, { useState, useEffect, useMemo } from 'react'
 import { AppHeader } from '@/components/AppHeader'
 import { BottomNav } from '@/components/BottomNav'
 import { DonutChart, type DonutSlice } from '@/components/DonutChart'
 import { transacoesService } from '@/services/transacoes'
 import type { Transacao } from '@/types/financial'
-import { TrendingUp, TrendingDown, ChevronRight, Eye, EyeOff, CreditCard } from 'lucide-react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { toast } from '@/hooks/use-toast'
+import { formatBRLPublic } from '@/lib/format'
+import { CategoryDetail } from '@/components/CategoryDetail'
 
+/**
+ * Tela de Resumo (Home) — gráfico "Gastos por Categoria" com centro "Total",
+ * fatias/legenda clicáveis (abrem os gastos da categoria) e a categoria
+ * padrão "Economia" (diferença entradas − saídas do mês).
+ */
 export const DashboardPage: React.FC = () => {
+  const [monthOffset, setMonthOffset] = useState<number>(0)
   const [transacoes, setTransacoes] = useState<Transacao[]>([])
   const [loading, setLoading] = useState(true)
-  const [showValues, setShowValues] = useState(true)
+  const [catDetalhe, setCatDetalhe] = useState<string | null>(null)
 
-  // Mês atual formato "YYYY-MM" (mês de fatura: a Home usa a mesma regra do extrato)
-  const now = new Date()
-  const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-  const monthName = now.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+  const targetDate = new Date()
+  targetDate.setMonth(targetDate.getMonth() + monthOffset)
+  const targetYear = targetDate.getFullYear()
+  const targetMonthNum = targetDate.getMonth() + 1
+  const monthStr = `${targetYear}-${String(targetMonthNum).padStart(2, '0')}`
+  const monthLabel = targetDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
 
-  const loadData = async () => {
+  const loadMonth = async () => {
     try {
       setLoading(true)
-      // `list({ mes })` já aplica a regra do vencimento (fatura do mês seguinte)
-      const txList = await transacoesService.list({ mes: currentMonthStr })
-      setTransacoes(txList)
+      const list = await transacoesService.list({ mes: monthStr })
+      setTransacoes(list)
     } catch (err) {
-      console.error('Erro ao carregar dados do dashboard:', err)
+      console.error('Erro ao carregar resumo:', err)
+      toast({
+        variant: 'destructive',
+        title: 'Erro ao carregar',
+        description: 'Não foi possível carregar as movimentações do mês.',
+      })
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => {
-    loadData()
-  }, [])
+    loadMonth()
+  }, [monthOffset])
 
-  // Cálculos do resumo — Saldo do mês = receitas - despesas da fatura atual
-  const receitasMes = transacoes
-    .filter((t) => t.tipo === 'receita')
-    .reduce((acc, t) => acc + t.valor, 0)
+  const receitas = transacoes.filter((t) => t.tipo === 'receita')
+  const despesas = transacoes.filter((t) => t.tipo === 'despesa')
+  const totalReceitas = receitas.reduce((acc, t) => acc + t.valor, 0)
+  const totalDespesas = despesas.reduce((acc, t) => acc + t.valor, 0)
 
-  const despesasMes = transacoes
-    .filter((t) => t.tipo === 'despesa')
-    .reduce((acc, t) => acc + t.valor, 0)
-
-  const saldoDoMes = receitasMes - despesasMes
-
-  // Agrupamento por categoria para o Donut
-  const catMap = new Map<string, { nome: string; cor: string; valor: number }>()
-
-  transacoes
-    .filter((t) => t.tipo === 'despesa')
-    .forEach((t) => {
+  // Agrupa despesas por categoria e acrescenta a "Economia" (padrão,
+  // não lançada manualmente) como a diferença entradas − saídas.
+  const donutData: DonutSlice[] = useMemo(() => {
+    const catMap = new Map<string, { nome: string; cor: string; valor: number }>()
+    despesas.forEach((t) => {
       const catId = t.categoria_id || 'outros'
       const existing = catMap.get(catId)
-      if (existing) {
-        existing.valor += t.valor
-      } else {
+      if (existing) existing.valor += t.valor
+      else
         catMap.set(catId, {
           nome: t.expand?.categoria_id?.nome || 'Outros',
           cor: t.expand?.categoria_id?.cor || '#A855F7',
           valor: t.valor,
         })
-      }
     })
 
-  const donutData: DonutSlice[] = Array.from(catMap.values())
-    .filter((c) => c.valor > 0)
-    .sort((a, b) => b.valor - a.valor)
-    .map((c) => ({ label: c.nome, value: c.valor, color: c.cor }))
+    const slices: DonutSlice[] = Array.from(catMap.entries())
+      .filter(([, c]) => c.valor > 0)
+      .sort((a, b) => b[1].valor - a[1].valor)
+      .map(([id, c]) => ({ id, label: c.nome, value: c.valor, color: c.cor }))
 
-  const formatBRL = (val: number) => {
-    if (!showValues) return '••••••'
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val)
-  }
+    const economia = totalReceitas - totalDespesas
+    if (economia > 0) {
+      slices.push({ id: '__economia__', label: 'Economia', value: economia, color: '#4C1D95' })
+      slices.sort((a, b) => b.value - a.value)
+    }
+    return slices
+  }, [despesas, totalReceitas, totalDespesas])
+
+  const catSelecionada = donutData.find((c) => c.id === catDetalhe) || null
+  const gastosCatSelecionada = useMemo(() => {
+    if (!catSelecionada) return []
+    if (catSelecionada.id === '__economia__') return []
+    return despesas.filter((t) => (t.categoria_id || 'outros') === catSelecionada.id)
+  }, [catSelecionada, despesas])
 
   return (
     <div className="min-h-screen bg-[#F6F3FB] text-[#1F1438] pb-24">
       <AppHeader />
 
       <main className="max-w-md mx-auto px-4 pt-4 space-y-4">
-        {/* Bloco de Saldo em Destaque (Topo) */}
-        <section className="bg-gradient-to-br from-[#4A247A] via-[#6639A6] to-[#7A45BF] text-white rounded-3xl p-5 shadow-[0_12px_32px_rgba(102,57,166,0.22)] relative overflow-hidden">
-          <div className="absolute right-0 top-0 translate-x-12 -translate-y-8 w-44 h-44 bg-white/10 rounded-full blur-2xl pointer-events-none" />
-
-          <div className="flex items-center justify-between text-white/80 text-xs mb-1.5">
-            <span className="font-medium tracking-wide capitalize">Saldo do mês</span>
-            <button
-              type="button"
-              onClick={() => setShowValues(!showValues)}
-              className="p-1 rounded-full hover:bg-white/10 transition text-white/90"
-              aria-label={showValues ? 'Ocultar saldo' : 'Mostrar saldo'}
-            >
-              {showValues ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-            </button>
-          </div>
-
-          <div className="text-3xl font-black tracking-tight mb-4 text-white">
-            {formatBRL(saldoDoMes)}
-          </div>
-
-          {/* Cards de Resumo Receitas / Despesas */}
-          <div className="grid grid-cols-2 gap-2 pt-3 border-t border-white/15">
-            <div className="bg-white/10 backdrop-blur-md rounded-2xl p-2.5">
-              <div className="flex items-center gap-1.5 text-emerald-300 text-[11px] font-semibold mb-0.5">
-                <TrendingUp className="w-3.5 h-3.5" />
-                <span>Receitas (Mês)</span>
-              </div>
-              <div className="text-sm font-bold text-white">{formatBRL(receitasMes)}</div>
+        <section className="bg-white rounded-3xl p-5 shadow-[0_4px_24px_rgba(102,57,166,0.06)] border border-[#EBE4F5]">
+          <h2 className="text-base font-black text-[#1F1438] mb-2">Gastos por Categoria</h2>
+          {loading ? (
+            <div className="py-12 text-center text-xs text-gray-400">
+              <span className="inline-block w-5 h-5 border-2 border-[#6639A6] border-t-transparent rounded-full animate-spin" />
             </div>
-
-            <div className="bg-white/10 backdrop-blur-md rounded-2xl p-2.5">
-              <div className="flex items-center gap-1.5 text-rose-300 text-[11px] font-semibold mb-0.5">
-                <TrendingDown className="w-3.5 h-3.5" />
-                <span>Despesas (Mês)</span>
-              </div>
-              <div className="text-sm font-bold text-white">{formatBRL(despesasMes)}</div>
+          ) : donutData.length === 0 ? (
+            <div className="py-8 text-center text-xs text-gray-400">
+              Nenhuma movimentação registrada neste mês.
             </div>
-          </div>
+          ) : (
+            <DonutChart
+              centerLabel="Total"
+              centerValue={totalDespesas}
+              slices={donutData}
+              onSelectSlice={(id) => setCatDetalhe((prev) => (prev === id ? null : id))}
+              selectedId={catDetalhe}
+            />
+          )}
         </section>
 
-        {/* Donut de Categorias — igual ao do projeto original */}
-        <section className="bg-white rounded-3xl p-5 shadow-[0_4px_24px_rgba(102,57,166,0.06)] border border-[#EBE4F5]">
-          <h2 className="text-base font-black text-[#1F1438] mb-2">Gastos por categoria</h2>
-
-          <DonutChart centerLabel="Renda" centerValue={receitasMes} slices={donutData} />
-        </section>
-
-        {/* Atalho para Cartões */}
-        <section className="bg-white rounded-3xl p-5 shadow-[0_4px_24px_rgba(102,57,166,0.06)] border border-[#EBE4F5]">
+        {/* Resumo do mês (entradas/saídas) */}
+        <section className="bg-white rounded-3xl p-5 shadow-[0_4px_24px_rgba(102,57,166,0.06)] border border-[#EBE4F5] space-y-3">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-[#6639A6]/10 text-[#6639A6]">
-                <CreditCard className="w-4.5 h-4.5" />
-              </div>
-              <div>
-                <p className="text-xs font-bold text-gray-900 leading-tight">Meus Cartões</p>
-                <p className="text-[10px] text-gray-500">Gerencie os vencimentos das faturas</p>
-              </div>
-            </div>
-            <Link
-              to="/cartoes"
-              className="text-xs text-[#6639A6] font-bold hover:underline inline-flex items-center gap-0.5"
+            <span className="text-xs font-semibold text-gray-500">Entradas do mês</span>
+            <span className="text-sm font-black text-emerald-600">
+              + {formatBRLPublic(totalReceitas)}
+            </span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-gray-500">Saídas do mês</span>
+            <span className="text-sm font-black text-rose-600">
+              − {formatBRLPublic(totalDespesas)}
+            </span>
+          </div>
+          <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
+            <span className="text-xs font-semibold text-gray-500">Economia</span>
+            <span
+              className={`text-sm font-black ${totalReceitas - totalDespesas >= 0 ? 'text-[#1D4ED8]' : 'text-rose-600'}`}
             >
-              Ver cartões
-              <ChevronRight className="w-3.5 h-3.5" />
-            </Link>
+              {totalReceitas - totalDespesas >= 0 ? '+' : '−'}{' '}
+              {formatBRLPublic(Math.abs(totalReceitas - totalDespesas))}
+            </span>
           </div>
         </section>
 
-        {/* Últimas Transações */}
-        <section className="bg-white rounded-3xl p-5 shadow-[0_4px_24px_rgba(102,57,166,0.06)] border border-[#EBE4F5]">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-bold text-[#1F1438]">Últimas Movimentações</h2>
-            <Link
-              to="/extrato"
-              className="text-xs text-[#6639A6] font-bold hover:underline inline-flex items-center gap-0.5"
-            >
-              Ver todas
-              <ChevronRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-
-          <div className="space-y-2">
-            {transacoes.slice(0, 5).map((t) => {
-              const dateObj = new Date(t.data)
-              const formattedDate = dateObj.toLocaleDateString('pt-BR', {
-                day: '2-digit',
-                month: '2-digit',
-              })
-              return (
-                <div
-                  key={t.id}
-                  className="flex items-center justify-between py-2 border-b border-gray-100 last:border-none"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <div
-                      className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
-                      style={{
-                        backgroundColor: (t.expand?.categoria_id?.cor || '#6639A6') + '20',
-                        color: t.expand?.categoria_id?.cor || '#6639A6',
-                      }}
-                    >
-                      {t.tipo === 'receita' ? (
-                        <TrendingUp className="w-4 h-4 text-emerald-600" />
-                      ) : (
-                        <TrendingDown className="w-4 h-4 text-rose-600" />
-                      )}
-                    </div>
-                    <div>
-                      <p className="text-xs font-bold text-gray-900 leading-tight">{t.descricao}</p>
-                      <p className="text-[10px] text-gray-500">
-                        {t.expand?.categoria_id?.nome || 'Geral'} • {formattedDate}
-                      </p>
-                    </div>
-                  </div>
-
-                  <span
-                    className={`text-xs font-bold ${
-                      t.tipo === 'receita' ? 'text-emerald-600' : 'text-rose-600'
-                    }`}
-                  >
-                    {t.tipo === 'receita' ? '+' : '-'} {formatBRL(t.valor)}
-                  </span>
-                </div>
-              )
-            })}
-
-            {transacoes.length === 0 && !loading && (
-              <div className="text-center py-6 text-xs text-gray-400">
-                Nenhuma movimentação neste mês.
-              </div>
-            )}
-          </div>
-        </section>
+        {/* Detalhe da categoria selecionada no gráfico */}
+        {catSelecionada && (
+          <CategoryDetail
+            nome={catSelecionada.label}
+            cor={catSelecionada.color}
+            valor={catSelecionada.value}
+            total={totalDespesas}
+            itens={gastosCatSelecionada}
+            onClose={() => setCatDetalhe(null)}
+          />
+        )}
       </main>
+
+      {/* Rodapé de navegação de mês */}
+      <footer className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-[#E5DEEE] py-2 shadow-[0_-4px_20px_rgba(102,57,166,0.06)]">
+        <div className="max-w-md mx-auto flex items-center justify-between px-4">
+          <button
+            type="button"
+            onClick={() => setMonthOffset((m) => m - 1)}
+            className="p-2 rounded-xl hover:bg-purple-50 text-[#6639A6] transition"
+            aria-label="Mês anterior"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+          <span className="text-sm font-bold capitalize text-[#1F1438]">{monthLabel}</span>
+          <button
+            type="button"
+            onClick={() => setMonthOffset((m) => m + 1)}
+            className="p-2 rounded-xl hover:bg-purple-50 text-[#6639A6] transition"
+            aria-label="Próximo mês"
+          >
+            <ChevronRight className="w-5 h-5" />
+          </button>
+        </div>
+      </footer>
 
       <BottomNav />
     </div>

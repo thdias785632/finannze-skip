@@ -202,4 +202,44 @@ export const transacoesService = {
   async delete(id: string): Promise<boolean> {
     return pb.collection('transacoes').delete(id)
   },
+
+  /**
+   * Cria a movimentação e, quando `parcelas` > 1 no cartão, divide o valor em
+   * N lançamentos mensais futuros (como no app original): a 1ª parcela usa a
+   * data informada e as demais avançam um mês por vez. A regra de qual fatura
+   * cada parcela entra continua sendo a do dia de vencimento (mesDaFatura).
+   */
+  async createComParcelas(data: {
+    descricao: string
+    valor: number
+    tipo: TipoTransacao
+    data: string // YYYY-MM-DD
+    categoriaId?: string
+    cartaoId?: string
+    parcelas?: number
+    recorrente?: boolean
+  }): Promise<Transacao[]> {
+    const n = Math.max(1, Math.min(24, data.parcelas || 1))
+    const base = data.data.slice(0, 10)
+    const [ano, mes, dia] = base.split('-').map(Number)
+
+    const criadas: Transacao[] = []
+    for (let i = 0; i < n; i++) {
+      const d = new Date(ano, mes - 1 + i, dia)
+      const dataParcela = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      const descricao = n > 1 ? `${data.descricao} (${i + 1}/${n})` : data.descricao
+      const criada = await this.create({
+        descricao,
+        valor: data.valor / n,
+        tipo: data.tipo,
+        data: dataParcela,
+        cartao_id: data.cartaoId,
+        categoria_id: data.categoriaId,
+        recorrente: data.recorrente,
+        pago: true,
+      })
+      criadas.push(criada)
+    }
+    return criadas
+  },
 }

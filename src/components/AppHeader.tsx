@@ -1,19 +1,13 @@
 import React from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
-import { LogOut, Plus, Sparkles } from 'lucide-react'
+import { LogOut, Sparkles } from 'lucide-react'
 
 interface AppHeaderProps {
   title?: string
-  showAddButton?: boolean
-  onAddClick?: () => void
 }
 
-export const AppHeader: React.FC<AppHeaderProps> = ({
-  title = 'Finanzze',
-  showAddButton = true,
-  onAddClick,
-}) => {
+export const AppHeader: React.FC<AppHeaderProps> = ({ title = 'Finanzze' }) => {
   const { user, plan, logout } = useAuth()
 
   const planBadgeClasses = {
@@ -46,17 +40,6 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
-          {showAddButton && (
-            <Link
-              to="/nova-transacao"
-              onClick={onAddClick}
-              className="inline-flex items-center gap-1.5 bg-white text-[#6639A6] text-xs font-bold px-3 py-1.5 rounded-full shadow-sm hover:bg-purple-50 active:scale-95 transition"
-            >
-              <Plus className="w-3.5 h-3.5 stroke-[3]" />
-              <span>Transação</span>
-            </Link>
-          )}
-
           <button
             type="button"
             onClick={logout}

@@ -1,48 +1,35 @@
-/* Main App Component - Handles routing (using react-router-dom), query client and other providers - use this file to add all routes */
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { Toaster } from '@/components/ui/toaster'
-import { Toaster as Sonner } from '@/components/ui/sonner'
-import { TooltipProvider } from '@/components/ui/tooltip'
+import React from 'react'
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { AuthProvider } from '@/context/AuthContext'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
+import Index from '@/pages/Index'
+import { DashboardPage } from '@/pages/Dashboard'
+import { ExtractPage } from '@/pages/Extract'
+import { CartoesPage } from '@/pages/Cartoes'
+import { PlansPage } from '@/pages/Plans'
+import { RealEstatePage } from '@/pages/RealEstate'
+import { NewTransactionPage } from '@/pages/NewTransaction'
+import NotFound from '@/pages/NotFound'
 
-import Index from './pages/Index'
-import NotFound from './pages/NotFound'
-import Layout from './components/Layout'
-
-// Páginas do Finanzze
-import { ExtractPage } from './pages/Extract'
-import { NewTransactionPage } from './pages/NewTransaction'
-import { CartoesPage } from './pages/Cartoes'
-import { RecurringPage } from './pages/Recurring'
-import { RealEstatePage } from './pages/RealEstate'
-import { PlansPage } from './pages/Plans'
-
-const App = () => (
-  <BrowserRouter>
-    <AuthProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
+const App: React.FC = () => {
+  return (
+    <BrowserRouter>
+      <AuthProvider>
         <Routes>
-          <Route element={<Layout />}>
-            <Route path="/" element={<Index />} />
-
-            {/* Rotas Autenticadas */}
-            <Route element={<ProtectedRoute />}>
-              <Route path="/extrato" element={<ExtractPage />} />
-              <Route path="/nova-transacao" element={<NewTransactionPage />} />
-              <Route path="/cartoes" element={<CartoesPage />} />
-              <Route path="/recorrentes" element={<RecurringPage />} />
-              <Route path="/imoveis" element={<RealEstatePage />} />
-              <Route path="/planos" element={<PlansPage />} />
-            </Route>
+          <Route path="/" element={<Index />} />
+          <Route element={<ProtectedRoute />}>
+            <Route path="/resumo" element={<DashboardPage />} />
+            <Route path="/extrato" element={<ExtractPage />} />
+            <Route path="/cartoes" element={<CartoesPage />} />
+            <Route path="/imoveis" element={<RealEstatePage />} />
+            <Route path="/planos" element={<PlansPage />} />
+            <Route path="/nova-transacao" element={<NewTransactionPage />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>
-      </TooltipProvider>
-    </AuthProvider>
-  </BrowserRouter>
-)
+      </AuthProvider>
+    </BrowserRouter>
+  )
+}
 
 export default App

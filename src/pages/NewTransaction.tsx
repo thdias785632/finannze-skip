@@ -1,399 +1,359 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AppHeader } from '@/components/AppHeader'
 import { BottomNav } from '@/components/BottomNav'
-import { transacoesService } from '@/services/transacoes'
 import { cartoesService } from '@/services/cartoes'
 import { categoriasService } from '@/services/categorias'
-import { useAuth } from '@/context/AuthContext'
-import type { Cartao, Categoria, TipoTransacao } from '@/types/financial'
-import {
-  TrendingDown,
-  TrendingUp,
-  ArrowLeft,
-  Calendar,
-  Lock,
-  Sparkles,
-  Tag,
-  CreditCard,
-  Plus,
-} from 'lucide-react'
+import { transacoesService } from '@/services/transacoes'
+import type { Cartao, Categoria } from '@/types/financial'
 import { toast } from '@/hooks/use-toast'
+import { ArrowLeftRight, CreditCard, Wallet, ArrowDownCircle, ArrowUpCircle } from 'lucide-react'
 
+type Modo = 'saida' | 'entrada'
+type AbaSaida = 'cartao' | 'outras'
+
+/**
+ * Cadastro de movimentação — espelho do modal do app original:
+ * para SAÍDAS há as abas "Cartão" e "Outras"; para ENTRADAS um formulário
+ * simples (sem cartão e sem parcelas). Parcelas dividem o valor em N
+ * lançamentos mensais futuros no cartão.
+ */
 export const NewTransactionPage: React.FC = () => {
   const navigate = useNavigate()
-  const { plan, canAccessRecurring } = useAuth()
 
-  const [tipo, setTipo] = useState<TipoTransacao>('despesa')
-  const [descricao, setDescricao] = useState('')
-  const [valorStr, setValorStr] = useState('')
-  const [dataStr, setDataStr] = useState(() => new Date().toISOString().slice(0, 10))
-  const [cartaoId, setCartaoId] = useState('')
-  const [categoriaId, setCategoriaId] = useState('')
-  const [recorrente, setRecorrente] = useState(false)
-  const [recorrenciaPeriodo, setRecorrenciaPeriodo] = useState<'mensal' | 'anual'>('mensal')
+  const [modo, setModo] = useState<Modo>('saida')
+  const [aba, setAba] = useState<AbaSaida>('cartao')
 
   const [cartoes, setCartoes] = useState<Cartao[]>([])
   const [categorias, setCategorias] = useState<Categoria[]>([])
-  const [loading, setLoading] = useState(false)
 
-  // Criar categoria personalizada direto na tela
-  const [showNewCatModal, setShowNewCatModal] = useState(false)
-  const [newCatNome, setNewCatNome] = useState('')
-  const [newCatCor, setNewCatCor] = useState('#8B5CF6')
+  const [cartaoId, setCartaoId] = useState('')
+  const [dataReferencia, setDataReferencia] = useState(() => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  })
+  const [nome, setNome] = useState('')
+  const [valor, setValor] = useState('')
+  const [categoriaId, setCategoriaId] = useState('')
+  const [parcelas, setParcelas] = useState('1')
+  const [recorrente, setRecorrente] = useState<'sim' | 'nao'>('nao')
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    Promise.all([cartoesService.list(), categoriasService.list()]).then(([cts, cats]) => {
-      setCartoes(cts)
-      if (cts.length > 0) setCartaoId(cts[0].id)
-      setCategorias(cats)
-      if (cats.length > 0) setCategoriaId(cats[0].id)
-    })
+    const load = async () => {
+      try {
+        const [cs, cats] = await Promise.all([cartoesService.list(), categoriasService.list()])
+        setCartoes(cs)
+        if (cs.length > 0) setCartaoId(cs[0].id)
+        setCategorias(cats)
+      } catch (err) {
+        console.error(err)
+        toast({ variant: 'destructive', title: 'Erro ao carregar dados do formulário' })
+      }
+    }
+    load()
   }, [])
 
-  const handleCreateCategoria = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!newCatNome) return
-    try {
-      const created = await categoriasService.create({
-        nome: newCatNome,
-        cor: newCatCor,
-        tipo: 'despesa',
-      })
-      setCategorias((prev) => [...prev, created])
-      setCategoriaId(created.id)
-      setShowNewCatModal(false)
-      setNewCatNome('')
-      toast({ title: 'Categoria criada com sucesso!' })
-    } catch {
-      toast({ variant: 'destructive', title: 'Erro ao criar categoria' })
-    }
+  const categoriasDoModo = useMemo(
+    () =>
+      categorias.filter((c) => (modo === 'entrada' ? c.tipo === 'receita' : c.tipo === 'despesa')),
+    [categorias, modo],
+  )
+
+  const numParcelas = Math.max(1, Math.min(24, Number(parcelas) || 1))
+  const valorNum = Number(valor.replace(',', '.'))
+
+  const reset = () => {
+    setNome('')
+    setValor('')
+    setCategoriaId('')
+    setParcelas('1')
+    setRecorrente('nao')
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    const parsedValor = parseFloat(valorStr.replace(/\./g, '').replace(',', '.'))
-    if (!descricao.trim()) {
-      toast({ variant: 'destructive', title: 'Informe a descrição' })
+    if (!nome.trim()) {
+      toast({ variant: 'destructive', title: 'Informe o nome da movimentação' })
       return
     }
-    if (!parsedValor || parsedValor <= 0) {
+    if (!valorNum || valorNum <= 0) {
       toast({ variant: 'destructive', title: 'Informe um valor válido' })
       return
     }
-    // Cartão é opcional: despesas em dinheiro/débito/boleto não têm cartão.
-
-    if (recorrente && !canAccessRecurring) {
-      toast({
-        variant: 'destructive',
-        title: 'Recursos Recorrentes',
-        description: 'Despesas recorrentes são exclusivas dos planos VIP e Premium.',
-      })
+    if (modo === 'saida' && aba === 'cartao' && !cartaoId) {
+      toast({ variant: 'destructive', title: 'Selecione o cartão' })
+      return
+    }
+    if (!categoriaId) {
+      toast({ variant: 'destructive', title: 'Selecione a categoria' })
       return
     }
 
-    setLoading(true)
+    setSaving(true)
     try {
-      await transacoesService.create({
-        descricao,
-        valor: parsedValor,
-        tipo,
-        data: dataStr,
-        cartao_id: cartaoId || undefined,
-        categoria_id: categoriaId || undefined,
-        recorrente: recorrente && canAccessRecurring,
-        recorrencia_periodo: recorrente ? recorrenciaPeriodo : undefined,
-        pago: true,
+      const isCartao = modo === 'saida' && aba === 'cartao'
+      const parcelasNum = isCartao ? numParcelas : 1
+
+      await transacoesService.createComParcelas({
+        descricao: nome.trim(),
+        valor: valorNum,
+        tipo: modo === 'entrada' ? 'receita' : 'despesa',
+        data: dataReferencia,
+        categoriaId,
+        cartaoId: isCartao ? cartaoId : undefined,
+        parcelas: parcelasNum,
+        recorrente: recorrente === 'sim',
       })
 
       toast({
-        title: 'Transação adicionada!',
+        title:
+          parcelasNum > 1 ? `${parcelasNum} parcelas cadastradas!` : 'Movimentação cadastrada!',
         description:
-          tipo === 'despesa' && cartaoId
-            ? 'Lançada no extrato. Se for a partir do vencimento, cai na fatura do mês seguinte.'
-            : 'Seu extrato foi atualizado.',
+          parcelasNum > 1
+            ? 'As parcelas aparecem nos meses seguintes conforme a fatura.'
+            : 'O lançamento foi registrado com sucesso.',
       })
+      reset()
       navigate('/')
     } catch (err) {
       console.error(err)
       toast({
         variant: 'destructive',
         title: 'Erro ao cadastrar',
-        description: 'Não foi possível salvar a transação.',
+        description: 'Verifique os campos e tente novamente.',
       })
     } finally {
-      setLoading(false)
+      setSaving(false)
     }
   }
 
+  const inputCls =
+    'w-full h-11 px-3 rounded-xl border border-gray-200 text-sm text-[#1F1438] bg-white focus:outline-none focus:ring-2 focus:ring-[#6639A6]/30 focus:border-[#6639A6]'
+  const labelCls = 'block text-[11px] font-semibold text-gray-600 mb-1'
+
   return (
     <div className="min-h-screen bg-[#F6F3FB] text-[#1F1438] pb-24">
-      <AppHeader showAddButton={false} />
+      <AppHeader />
 
-      <main className="max-w-md mx-auto px-4 pt-4 space-y-4">
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => navigate(-1)}
-            className="p-2 rounded-xl bg-white border border-[#EBE4F5] text-gray-700 hover:bg-gray-50 transition"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
-          <h1 className="text-base font-black text-[#1F1438]">Nova Transação</h1>
-        </div>
-
-        <form
-          onSubmit={handleSubmit}
-          className="bg-white rounded-3xl p-5 shadow-[0_4px_24px_rgba(102,57,166,0.06)] border border-[#EBE4F5] space-y-4"
-        >
-          {/* Alternador Receita / Despesa */}
-          <div className="grid grid-cols-2 gap-2 p-1 bg-[#F4F1F9] rounded-2xl">
+      <main className="max-w-md mx-auto px-4 pt-4 pb-10">
+        <div className="bg-white rounded-3xl p-5 shadow-[0_4px_24px_rgba(102,57,166,0.08)] border border-[#EBE4F5]">
+          {/* Seletor Entrada / Saída */}
+          <div className="flex items-center justify-center gap-2 mb-4">
             <button
               type="button"
-              onClick={() => setTipo('despesa')}
-              className={`py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition ${
-                tipo === 'despesa'
-                  ? 'bg-rose-500 text-white shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
+              onClick={() => setModo('saida')}
+              className={`flex-1 py-2.5 rounded-2xl text-xs font-bold flex items-center justify-center gap-1.5 transition ${
+                modo === 'saida'
+                  ? 'bg-[#6639A6] text-white shadow-md'
+                  : 'bg-[#F6F3FB] text-[#6639A6] hover:bg-[#EFE7F8]'
               }`}
             >
-              <TrendingDown className="w-4 h-4" />
-              Despesa
+              <ArrowDownCircle className="w-4 h-4" />
+              Saída
             </button>
             <button
               type="button"
-              onClick={() => setTipo('receita')}
-              className={`py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition ${
-                tipo === 'receita'
-                  ? 'bg-emerald-500 text-white shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
+              onClick={() => setModo('entrada')}
+              className={`flex-1 py-2.5 rounded-2xl text-xs font-bold flex items-center justify-center gap-1.5 transition ${
+                modo === 'entrada'
+                  ? 'bg-emerald-600 text-white shadow-md'
+                  : 'bg-[#F6F3FB] text-emerald-700 hover:bg-emerald-50'
               }`}
             >
-              <TrendingUp className="w-4 h-4" />
-              Receita
+              <ArrowUpCircle className="w-4 h-4" />
+              Entrada
             </button>
           </div>
 
-          {/* Campo de Valor */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">Valor (R$)</label>
-            <div className="relative">
-              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-400">
-                R$
-              </span>
-              <input
-                type="text"
-                value={valorStr}
-                onChange={(e) => setValorStr(e.target.value)}
-                placeholder="0,00"
-                required
-                className="w-full h-12 pl-10 pr-3 rounded-2xl border border-[#D9CDEB] bg-white text-lg font-black text-[#1F1438] focus:outline-none focus:border-[#6639A6] focus:ring-2 focus:ring-[#6639A6]/15 transition"
-              />
-            </div>
-          </div>
-
-          {/* Descrição */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">Descrição</label>
-            <input
-              type="text"
-              value={descricao}
-              onChange={(e) => setDescricao(e.target.value)}
-              placeholder="Ex: Supermercado, Salário, Internet"
-              required
-              className="w-full h-11 px-3.5 rounded-2xl border border-[#D9CDEB] bg-white text-sm text-[#1F1438] focus:outline-none focus:border-[#6639A6] transition"
-            />
-          </div>
-
-          {/* Data */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">
-              Data da Movimentação
-            </label>
-            <div className="relative">
-              <input
-                type="date"
-                value={dataStr}
-                onChange={(e) => setDataStr(e.target.value)}
-                required
-                className="w-full h-11 px-3.5 rounded-2xl border border-[#D9CDEB] bg-white text-sm text-[#1F1438] focus:outline-none focus:border-[#6639A6] transition"
-              />
-            </div>
-          </div>
-
-          {/* Cartão (opcional para receitas) */}
-          {cartoes.length > 0 && (
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1 flex items-center justify-between">
-                <span className="flex items-center gap-1">
-                  <CreditCard className="w-3.5 h-3.5 text-[#6639A6]" />
-                  Cartão
-                </span>
+          <form onSubmit={handleSubmit} className="space-y-3">
+            {/* Abas Cartão / Outras (somente saídas) */}
+            {modo === 'saida' && (
+              <div className="grid grid-cols-2 gap-1 bg-[#F1EAF9] rounded-2xl p-1">
                 <button
                   type="button"
-                  onClick={() => navigate('/cartoes')}
-                  className="text-[11px] text-[#6639A6] hover:underline"
+                  onClick={() => setAba('cartao')}
+                  className={`py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition ${
+                    aba === 'cartao' ? 'bg-white text-[#6639A6] shadow-xs' : 'text-gray-500'
+                  }`}
                 >
-                  Gerenciar
+                  <CreditCard className="w-3.5 h-3.5" />
+                  Cartão
                 </button>
-              </label>
-              <select
-                value={cartaoId}
-                onChange={(e) => setCartaoId(e.target.value)}
-                className="w-full h-11 px-3.5 rounded-2xl border border-[#D9CDEB] bg-white text-sm text-[#1F1438] focus:outline-none focus:border-[#6639A6] transition"
-              >
-                <option value="">Sem cartão (dinheiro / débito / boleto)</option>
-                {cartoes.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.nome} • Vence dia {c.dia_vencimento}
-                  </option>
-                ))}
-              </select>
-              <p className="text-[10px] text-gray-500 mt-1">
-                Gastos no dia do vencimento ou depois entram na fatura do mês seguinte.
-              </p>
-            </div>
-          )}
-
-          {/* Categoria */}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-xs font-semibold text-gray-700 flex items-center gap-1">
-                <Tag className="w-3.5 h-3.5 text-[#6639A6]" />
-                Categoria
-              </label>
-              <button
-                type="button"
-                onClick={() => setShowNewCatModal(true)}
-                className="text-[11px] text-[#6639A6] font-semibold hover:underline flex items-center gap-0.5"
-              >
-                <Plus className="w-3 h-3" />
-                Nova categoria
-              </button>
-            </div>
-            <select
-              value={categoriaId}
-              onChange={(e) => setCategoriaId(e.target.value)}
-              className="w-full h-11 px-3.5 rounded-2xl border border-[#D9CDEB] bg-white text-sm text-[#1F1438] focus:outline-none focus:border-[#6639A6] transition"
-            >
-              {categorias.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.nome}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Recorrente (Regra do Plano VIP / Premium) */}
-          <div className="pt-2 border-t border-gray-100">
-            <div className="flex items-center justify-between p-3 rounded-2xl bg-purple-50/70 border border-purple-100">
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="recorrente"
-                  checked={recorrente}
-                  onChange={(e) => {
-                    if (!canAccessRecurring) {
-                      toast({
-                        variant: 'destructive',
-                        title: 'Recorrentes é VIP / Premium',
-                        description: 'Faça upgrade para automatizar despesas fixas todo mês!',
-                      })
-                      return
-                    }
-                    setRecorrente(e.target.checked)
-                  }}
-                  className="w-4 h-4 rounded text-[#6639A6] focus:ring-[#6639A6]"
-                />
-                <label
-                  htmlFor="recorrente"
-                  className="text-xs font-bold text-gray-800 cursor-pointer"
+                <button
+                  type="button"
+                  onClick={() => setAba('outras')}
+                  className={`py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition ${
+                    aba === 'outras' ? 'bg-white text-[#6639A6] shadow-xs' : 'text-gray-500'
+                  }`}
                 >
-                  Despesa / Receita Recorrente
-                </label>
+                  <Wallet className="w-3.5 h-3.5" />
+                  Outras
+                </button>
               </div>
+            )}
 
-              {!canAccessRecurring && (
-                <span className="inline-flex items-center gap-1 text-[10px] uppercase font-black px-2 py-0.5 rounded-full bg-[#6639A6] text-white">
-                  <Lock className="w-2.5 h-2.5" /> VIP
-                </span>
-              )}
-            </div>
-
-            {recorrente && canAccessRecurring && (
-              <div className="mt-2 pl-2">
-                <label className="block text-[11px] font-semibold text-gray-600 mb-1">
-                  Periodicidade
-                </label>
+            {/* Cartão (somente aba Cartão) */}
+            {modo === 'saida' && aba === 'cartao' && (
+              <div>
+                <label className={labelCls}>Selecione o Cartão*</label>
                 <select
-                  value={recorrenciaPeriodo}
-                  onChange={(e) => setRecorrenciaPeriodo(e.target.value as 'mensal' | 'anual')}
-                  className="w-full h-9 px-3 rounded-xl border border-purple-200 text-xs text-[#1F1438]"
+                  value={cartaoId}
+                  onChange={(e) => setCartaoId(e.target.value)}
+                  className={inputCls}
+                  required
                 >
-                  <option value="mensal">Repete todo mês (Mensal)</option>
-                  <option value="anual">Repete todo ano (Anual)</option>
+                  <option value="">Selecione o Cartão*</option>
+                  {cartoes.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.nome}
+                    </option>
+                  ))}
                 </select>
               </div>
             )}
-          </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full h-12 rounded-2xl bg-[#6639A6] hover:bg-[#522c8a] text-white font-bold text-sm shadow-[0_8px_20px_rgba(102,57,166,0.3)] transition cursor-pointer"
-          >
-            {loading ? 'Salvando...' : 'Confirmar Lançamento'}
-          </button>
-        </form>
+            {/* Data de Referência */}
+            <div>
+              <label className={labelCls}>Data de Referência*</label>
+              <input
+                type="date"
+                value={dataReferencia}
+                onChange={(e) => setDataReferencia(e.target.value)}
+                className={inputCls}
+                required
+              />
+            </div>
 
-        {/* Modal de Criação Rápida de Categoria */}
-        {showNewCatModal && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-3xl p-5 max-w-xs w-full shadow-2xl space-y-3">
-              <h3 className="text-sm font-bold text-[#1F1438]">Nova Categoria</h3>
+            {/* Nome */}
+            <div>
+              <label className={labelCls}>
+                {modo === 'entrada' ? 'Nome da entrada*' : 'Nome da saída*'}
+              </label>
+              <input
+                type="text"
+                value={nome}
+                onChange={(e) => setNome(e.target.value)}
+                placeholder={modo === 'entrada' ? 'Nome da entrada*' : 'Nome da saída*'}
+                className={inputCls}
+                required
+              />
+            </div>
+
+            {/* Valor */}
+            <div>
+              <label className={labelCls}>Valor*</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0.01"
+                inputMode="decimal"
+                value={valor}
+                onChange={(e) => setValor(e.target.value)}
+                placeholder="Valor*"
+                className={inputCls}
+                required
+              />
+            </div>
+
+            {/* Categoria */}
+            <div>
+              <label className={labelCls}>Selecione a Categoria*</label>
+              <select
+                value={categoriaId}
+                onChange={(e) => setCategoriaId(e.target.value)}
+                className={inputCls}
+                required
+              >
+                <option value="">Selecione a Categoria*</option>
+                {categoriasDoModo.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nome}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Parcelas (somente aba Cartão) */}
+            {modo === 'saida' && aba === 'cartao' && (
               <div>
-                <label className="block text-xs text-gray-600 mb-1">Nome</label>
+                <label className={labelCls}>Parcelas</label>
                 <input
-                  type="text"
-                  value={newCatNome}
-                  onChange={(e) => setNewCatNome(e.target.value)}
-                  placeholder="Ex: Assinaturas"
-                  className="w-full h-10 px-3 rounded-xl border border-gray-200 text-xs"
+                  type="number"
+                  min={1}
+                  max={24}
+                  value={parcelas}
+                  onChange={(e) => setParcelas(e.target.value)}
+                  placeholder="Parcelas"
+                  className={inputCls}
                 />
+                {numParcelas > 1 && valorNum > 0 && (
+                  <p className="text-[10px] text-gray-500 mt-1">
+                    {numParcelas}x de{' '}
+                    <strong className="text-[#6639A6]">
+                      {new Intl.NumberFormat('pt-BR', {
+                        style: 'currency',
+                        currency: 'BRL',
+                      }).format(valorNum / numParcelas)}
+                    </strong>{' '}
+                    — um lançamento por mês, conforme a fatura.
+                  </p>
+                )}
               </div>
-              <div>
-                <label className="block text-xs text-gray-600 mb-1">Cor da Categoria</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="color"
-                    value={newCatCor}
-                    onChange={(e) => setNewCatCor(e.target.value)}
-                    className="w-10 h-10 p-0.5 rounded-lg border border-gray-200 cursor-pointer"
-                  />
-                  <span className="text-xs font-mono text-gray-600">{newCatCor}</span>
-                </div>
-              </div>
+            )}
 
-              <div className="flex items-center gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowNewCatModal(false)}
-                  className="flex-1 py-2 text-xs font-semibold text-gray-600 rounded-xl bg-gray-100 hover:bg-gray-200"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  onClick={handleCreateCategoria}
-                  className="flex-1 py-2 text-xs font-bold text-white rounded-xl bg-[#6639A6] hover:bg-[#522c8a]"
-                >
-                  Salvar
-                </button>
+            {/* Recorrente */}
+            <div>
+              <label className={labelCls}>Recorrente:</label>
+              <div className="flex items-center gap-6 pl-1">
+                <label className="flex items-center gap-2 text-xs font-semibold text-gray-700 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="recorrente"
+                    checked={recorrente === 'sim'}
+                    onChange={() => setRecorrente('sim')}
+                    className="accent-[#6639A6] w-4 h-4"
+                  />
+                  Sim
+                </label>
+                <label className="flex items-center gap-2 text-xs font-semibold text-gray-700 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="recorrente"
+                    checked={recorrente === 'nao'}
+                    onChange={() => setRecorrente('nao')}
+                    className="accent-[#6639A6] w-4 h-4"
+                  />
+                  Não
+                </label>
               </div>
             </div>
-          </div>
-        )}
+
+            {/* Ações */}
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => navigate(-1)}
+                className="flex-1 py-3 text-xs font-bold text-[#6639A6] rounded-2xl bg-[#F1EAF9] hover:bg-[#E3D5F5] transition"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="flex-1 py-3 text-xs font-bold text-white rounded-2xl bg-[#6639A6] hover:bg-[#522c8a] disabled:opacity-60 transition"
+              >
+                {saving ? 'Cadastrando...' : 'Cadastrar'}
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <p className="text-center text-[10px] text-gray-400 mt-3 flex items-center justify-center gap-1">
+          <ArrowLeftRight className="w-3 h-3" />
+          Gastos no cartão a partir do dia do vencimento caem na fatura do mês seguinte.
+        </p>
       </main>
 
       <BottomNav />

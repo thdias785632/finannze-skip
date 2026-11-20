@@ -1,11 +1,11 @@
 import React from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { LayoutDashboard, ReceiptText, Repeat, CreditCard, Building2, Crown } from 'lucide-react'
+import { LayoutDashboard, ReceiptText, CreditCard, Building2, Crown } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 
 export const BottomNav: React.FC = () => {
   const location = useLocation()
-  const { plan, canAccessRecurring, canAccessImoveis } = useAuth()
+  const { plan, canAccessImoveis } = useAuth()
 
   const navItems = [
     {
@@ -25,13 +25,6 @@ export const BottomNav: React.FC = () => {
       label: 'Cartões',
       icon: CreditCard,
       active: location.pathname.startsWith('/cartoes'),
-    },
-    {
-      to: '/recorrentes',
-      label: 'Recorrentes',
-      icon: Repeat,
-      active: location.pathname.startsWith('/recorrentes'),
-      badge: !canAccessRecurring ? 'VIP' : undefined,
     },
     ...(canAccessImoveis
       ? [

@@ -1,24 +1,51 @@
 import React, { useMemo, useState } from 'react'
 
 export interface DonutSlice {
+  /** Identificador estável da fatia (id da categoria). */
+  id?: string
   label: string
   value: number
   color: string
 }
 
 interface DonutChartProps {
-  /** Rótulo do centro quando nenhuma fatia está selecionada (ex.: "Renda"). */
+  /** Rótulo do centro quando nenhuma fatia está selecionada (ex.: "Total"). */
   centerLabel: string
   /** Valor central quando nenhuma fatia está selecionada. */
   centerValue: number
   /** Fatias ordenadas (maior → menor). */
   slices: DonutSlice[]
+  /** Chamado quando o usuário toca numa fatia ou num item da legenda. */
+  onSelectSlice?: (id: string) => void
+  /** Fatia atualmente selecionada (controlado pelo pai). */
+  selectedId?: string | null
 }
 
 const GAP_ANGLE = 1.5
 
-const DonutChart: React.FC<DonutChartProps> = ({ centerLabel, centerValue, slices }) => {
-  const [active, setActive] = useState<number | null>(null)
+const DonutChart: React.FC<DonutChartProps> = ({
+  centerLabel,
+  centerValue,
+  slices,
+  onSelectSlice,
+  selectedId = null,
+}) => {
+  const [internalActive, setInternalActive] = useState<number | null>(null)
+
+  // Se o pai controla a seleção por id, sincroniza; senão usa o estado interno.
+  const controlledIndex =
+    selectedId && slices.length > 0 ? slices.findIndex((s) => s.id === selectedId) : -1
+  const active = controlledIndex >= 0 ? controlledIndex : internalActive
+
+  const setActive = (index: number | null) => {
+    setInternalActive(index)
+    if (onSelectSlice) {
+      const slice = index !== null ? slices[index] : null
+      if (slice?.id) onSelectSlice(slice.id)
+      else if (index === null) onSelectSlice('')
+      else if (slice) onSelectSlice(slice.label)
+    }
+  }
 
   const total = useMemo(() => slices.reduce((acc, s) => acc + s.value, 0), [slices])
 
@@ -97,7 +124,7 @@ const DonutChart: React.FC<DonutChartProps> = ({ centerLabel, centerValue, slice
             )
             return (
               <path
-                key={slice.label}
+                key={slice.id || slice.label}
                 d={path}
                 fill={slice.color}
                 opacity={dimmed ? 0.35 : 1}
@@ -147,7 +174,7 @@ const DonutChart: React.FC<DonutChartProps> = ({ centerLabel, centerValue, slice
       <div className="divide-y divide-gray-100">
         {arcs.map(({ slice, fraction, index }) => (
           <button
-            key={slice.label}
+            key={slice.id || slice.label}
             type="button"
             onClick={() => setActive(active === index ? null : index)}
             className={`w-full flex items-center justify-between py-2.5 px-1 transition rounded-lg ${
