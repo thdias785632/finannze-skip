@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-20T22:44:47.836Z",
+  "generatedAt": "2026-11-20T23:15:40.751Z",
   "collections": [
     {
       "name": "users",
@@ -283,6 +283,24 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "data_chaves",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "data_financiamento",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "defasagem_incc",
+          "type": "number",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": ["CREATE INDEX idx_imoveis_user ON imoveis (user_id)"]
@@ -475,6 +493,151 @@
         }
       ],
       "indexes": ["CREATE INDEX idx_cartoes_user ON cartoes (user_id)"]
+    },
+    {
+      "name": "imoveis_fluxos",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && user_id = @request.auth.id",
+        "view": "@request.auth.id != '' && user_id = @request.auth.id",
+        "create": "@request.auth.id != '' && @request.body.user_id = @request.auth.id",
+        "update": "@request.auth.id != '' && user_id = @request.auth.id",
+        "delete": "@request.auth.id != '' && user_id = @request.auth.id"
+      },
+      "fields": [
+        {
+          "name": "user_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "imovel_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "imoveis"
+        },
+        {
+          "name": "nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "tipo",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["entrada", "sinal", "anual", "mensal", "financiamento"]
+        },
+        {
+          "name": "ordem",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "valor_total",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_fluxos_imovel ON imoveis_fluxos (imovel_id)",
+        "CREATE INDEX idx_fluxos_user ON imoveis_fluxos (user_id)"
+      ]
+    },
+    {
+      "name": "imoveis_fluxo_parcelas",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && user_id = @request.auth.id",
+        "view": "@request.auth.id != '' && user_id = @request.auth.id",
+        "create": "@request.auth.id != '' && @request.body.user_id = @request.auth.id",
+        "update": "@request.auth.id != '' && user_id = @request.auth.id",
+        "delete": "@request.auth.id != '' && user_id = @request.auth.id"
+      },
+      "fields": [
+        {
+          "name": "user_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "fluxo_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "imoveis_fluxos"
+        },
+        {
+          "name": "numero",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "valor_base",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "vencimento",
+          "type": "date",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "mes_base",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "pago",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_fluxo_parcelas_fluxo ON imoveis_fluxo_parcelas (fluxo_id)",
+        "CREATE INDEX idx_fluxo_parcelas_user ON imoveis_fluxo_parcelas (user_id)"
+      ]
     }
   ]
 }

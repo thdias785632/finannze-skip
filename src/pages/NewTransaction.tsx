@@ -7,7 +7,15 @@ import { categoriasService } from '@/services/categorias'
 import { transacoesService } from '@/services/transacoes'
 import type { Cartao, Categoria } from '@/types/financial'
 import { toast } from '@/hooks/use-toast'
-import { ArrowLeftRight, CreditCard, Wallet, ArrowDownCircle, ArrowUpCircle } from 'lucide-react'
+import {
+  ArrowLeftRight,
+  CreditCard,
+  Wallet,
+  ArrowDownCircle,
+  ArrowUpCircle,
+  Plus,
+} from 'lucide-react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 type Modo = 'saida' | 'entrada'
 type AbaSaida = 'cartao' | 'outras'
@@ -39,6 +47,12 @@ export const NewTransactionPage: React.FC = () => {
   const [recorrente, setRecorrente] = useState<'sim' | 'nao'>('nao')
   const [saving, setSaving] = useState(false)
 
+  // Cadastro de nova categoria inline
+  const [novaCatOpen, setNovaCatOpen] = useState(false)
+  const [novaCatNome, setNovaCatNome] = useState('')
+  const [novaCatCor, setNovaCatCor] = useState('#6639A6')
+  const [novaCatSaving, setNovaCatSaving] = useState(false)
+
   useEffect(() => {
     const load = async () => {
       try {
@@ -69,6 +83,32 @@ export const NewTransactionPage: React.FC = () => {
     setCategoriaId('')
     setParcelas('1')
     setRecorrente('nao')
+  }
+
+  const handleCriarCategoria = async () => {
+    if (!novaCatNome.trim()) {
+      toast({ variant: 'destructive', title: 'Informe o nome da categoria' })
+      return
+    }
+    setNovaCatSaving(true)
+    try {
+      const nova = await categoriasService.create({
+        nome: novaCatNome.trim(),
+        cor: novaCatCor,
+        tipo: modo === 'entrada' ? 'receita' : 'despesa',
+      })
+      setCategorias((prev) => [...prev, nova])
+      setCategoriaId(nova.id)
+      setNovaCatOpen(false)
+      setNovaCatNome('')
+      setNovaCatCor('#6639A6')
+      toast({ title: 'Categoria criada!', description: `"${nova.nome}" já pode ser usada.` })
+    } catch (err) {
+      console.error(err)
+      toast({ variant: 'destructive', title: 'Erro ao criar categoria' })
+    } finally {
+      setNovaCatSaving(false)
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -257,9 +297,19 @@ export const NewTransactionPage: React.FC = () => {
               />
             </div>
 
-            {/* Categoria */}
+            {/* Categoria + botão para cadastrar nova */}
             <div>
-              <label className={labelCls}>Selecione a Categoria*</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className={`${labelCls} mb-0`}>Selecione a Categoria*</label>
+                <button
+                  type="button"
+                  onClick={() => setNovaCatOpen(true)}
+                  className="flex items-center gap-1 text-[11px] font-bold text-[#6639A6] hover:underline"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Nova categoria
+                </button>
+              </div>
               <select
                 value={categoriaId}
                 onChange={(e) => setCategoriaId(e.target.value)}
@@ -349,6 +399,64 @@ export const NewTransactionPage: React.FC = () => {
             </div>
           </form>
         </div>
+
+        {/* Dialog de nova categoria */}
+        <Dialog open={novaCatOpen} onOpenChange={setNovaCatOpen}>
+          <DialogContent className="max-w-sm rounded-3xl">
+            <DialogHeader>
+              <DialogTitle className="text-sm font-black text-[#1F1438]">
+                Nova categoria
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div>
+                <label className={labelCls}>Nome*</label>
+                <input
+                  type="text"
+                  value={novaCatNome}
+                  onChange={(e) => setNovaCatNome(e.target.value)}
+                  placeholder="Ex.: Mercado"
+                  className={inputCls}
+                />
+              </div>
+              <div>
+                <label className={labelCls}>Cor</label>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    '#6639A6',
+                    '#EF4444',
+                    '#F59E0B',
+                    '#10B981',
+                    '#3B82F6',
+                    '#EC4899',
+                    '#14B8A6',
+                    '#8B5CF6',
+                    '#6B7280',
+                  ].map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setNovaCatCor(c)}
+                      className={`w-7 h-7 rounded-full border-2 transition ${
+                        novaCatCor === c ? 'border-[#1F1438] scale-110' : 'border-transparent'
+                      }`}
+                      style={{ backgroundColor: c }}
+                      aria-label={`Cor ${c}`}
+                    />
+                  ))}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleCriarCategoria}
+                disabled={novaCatSaving}
+                className="w-full py-2.5 text-xs font-bold text-white rounded-2xl bg-[#6639A6] hover:bg-[#522c8a] disabled:opacity-60 transition"
+              >
+                {novaCatSaving ? 'Salvando...' : 'Criar categoria'}
+              </button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         <p className="text-center text-[10px] text-gray-400 mt-3 flex items-center justify-center gap-1">
           <ArrowLeftRight className="w-3 h-3" />

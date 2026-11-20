@@ -63,8 +63,40 @@ export interface Imovel {
   data_contrato?: string
   mes_base_incc: string
   defasagem_meses?: number
+  /** Defasagem do INCC: quantos meses antes do vencimento o índice é aplicado. */
+  defasagem_incc?: number
+  data_chaves?: string
+  data_financiamento?: string
   data_entrega?: string
   observacoes?: string
+  created: string
+  updated: string
+}
+
+export type TipoFluxo = 'entrada' | 'sinal' | 'anual' | 'mensal' | 'financiamento'
+
+export interface FluxoImovel {
+  id: string
+  user_id: string
+  imovel_id: string
+  nome: string
+  tipo: TipoFluxo
+  ordem?: number
+  valor_total?: number
+  created: string
+  updated: string
+}
+
+export interface ParcelaFluxo {
+  id: string
+  user_id: string
+  fluxo_id: string
+  numero?: number
+  valor_base: number
+  vencimento: string
+  /** Mês (YYYY-MM) do índice INCC aplicado nesta parcela. */
+  mes_base?: string
+  pago: boolean
   created: string
   updated: string
 }

@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react'
 import { AppHeader } from '@/components/AppHeader'
 import { BottomNav } from '@/components/BottomNav'
 import { DonutChart, type DonutSlice } from '@/components/DonutChart'
+import { cartoesService } from '@/services/cartoes'
 import { transacoesService } from '@/services/transacoes'
-import type { Transacao } from '@/types/financial'
+import type { Cartao, Transacao } from '@/types/financial'
 import { ChevronLeft, ChevronRight, Trash2, Pencil, Eye, Plus, Lock, Sparkles } from 'lucide-react'
 import { toast } from '@/hooks/use-toast'
 import { formatBRLPublic } from '@/lib/format'
@@ -13,7 +14,9 @@ import { Link, useNavigate } from 'react-router-dom'
 /**
  * Tela de Extrato — espelho da tela do app original:
  * um gráfico "Gastos por Categoria" (donut) no topo, seguido dos cards
- * "Entradas do mês" e "Saídas do mês", com navegação de mês no rodapé.
+ * "Entradas do mês" e "Saídas do mês". Nas saídas, cada despesa sem cartão
+ * tem sua própria linha e TODAS as despesas de cartão do mês somam em uma
+ * única linha "Cartões" — o olho leva à aba Cartões (gasto por cartão).
  */
 export const ExtractPage: React.FC = () => {
   const { canAccessFutureExtract } = useAuth()
@@ -22,6 +25,7 @@ export const ExtractPage: React.FC = () => {
   const [monthOffset, setMonthOffset] = useState<number>(0)
   const [transacoes, setTransacoes] = useState<Transacao[]>([])
   const [loading, setLoading] = useState(true)
+  const [cartoes, setCartoes] = useState<Cartao[]>([])
 
   // Detalhe de categoria aberto a partir do donut
   const [catDetalhe, setCatDetalhe] = useState<string | null>(null)
@@ -46,6 +50,7 @@ export const ExtractPage: React.FC = () => {
       setLoading(true)
       const list = await transacoesService.list({ mes: monthStr })
       setTransacoes(list)
+      setCartoes(await cartoesService.list())
     } catch (err) {
       console.error('Erro ao carregar extrato:', err)
       toast({
@@ -82,6 +87,9 @@ export const ExtractPage: React.FC = () => {
 
   const receitas = transacoes.filter((t) => t.tipo === 'receita')
   const despesas = transacoes.filter((t) => t.tipo === 'despesa')
+  const despesasCartao = despesas.filter((t) => t.cartao_id)
+  const despesasSemCartao = despesas.filter((t) => !t.cartao_id)
+  const totalCartoes = despesasCartao.reduce((acc, t) => acc + t.valor, 0)
 
   const totalReceitas = receitas.reduce((acc, t) => acc + t.valor, 0)
   const totalDespesas = despesas.reduce((acc, t) => acc + t.valor, 0)
@@ -176,11 +184,13 @@ export const ExtractPage: React.FC = () => {
             <MonthEntriesCard
               title="Saídas do mês"
               titleClass="text-[#6639A6]"
-              itens={despesas}
+              itens={despesasSemCartao}
               total={totalDespesas}
               onDelete={handleDelete}
               onCreate={() => setMonthOffset(monthOffset)}
-              showEyeForCardInstallments
+              cartoes={cartoes}
+              totalCartoes={totalCartoes}
+              qtdeLancamentosCartao={despesasCartao.length}
             />
           </>
         )}
@@ -208,6 +218,7 @@ export const ExtractPage: React.FC = () => {
           </button>
         </div>
       </footer>
+      <BottomNav />
     </div>
   )
 }
@@ -250,7 +261,9 @@ interface MonthEntriesCardProps {
   total: number
   onDelete: (id: string) => void
   onCreate?: () => void
-  showEyeForCardInstallments?: boolean
+  cartoes?: Cartao[]
+  totalCartoes?: number
+  qtdeLancamentosCartao?: number
 }
 
 const MonthEntriesCard: React.FC<MonthEntriesCardProps> = ({
@@ -259,9 +272,12 @@ const MonthEntriesCard: React.FC<MonthEntriesCardProps> = ({
   itens,
   total,
   onDelete,
-  showEyeForCardInstallments = false,
+  cartoes,
+  totalCartoes = 0,
+  qtdeLancamentosCartao = 0,
 }) => {
   const navigate = useNavigate()
+  const temConsolidadoCartoes = cartoes !== undefined
   return (
     <section className="bg-white rounded-3xl p-5 shadow-[0_4px_24px_rgba(102,57,166,0.06)] border border-[#EBE4F5]">
       <div className="flex items-center justify-between mb-2">
@@ -276,60 +292,99 @@ const MonthEntriesCard: React.FC<MonthEntriesCardProps> = ({
         </button>
       </div>
 
-      {itens.length === 0 ? (
-        <EmptyHint text="Nada registrado neste mês." />
-      ) : (
-        <div className="divide-y divide-gray-100">
-          {itens.map((t) => {
-            const isReceita = t.tipo === 'receita'
-            const isCartao = !isReceita && Boolean(t.cartao_id)
-            return (
-              <div key={t.id} className="flex items-center justify-between py-3">
-                <span className="text-xs font-semibold text-[#1F1438] truncate min-w-0">
-                  {t.descricao}
-                </span>
-
-                <div className="flex items-center gap-2 shrink-0">
-                  <span
-                    className={`text-xs font-black tabular-nums ${
-                      isReceita ? 'text-emerald-600' : 'text-rose-600'
-                    }`}
-                  >
-                    {isReceita ? '+' : '−'} {formatBRLPublic(t.valor)}
+      {temConsolidadoCartoes ? (
+        /* Saídas: linha por despesa sem cartão + UMA linha consolidada de cartões */
+        <>
+          {itens.length === 0 && qtdeLancamentosCartao === 0 ? (
+            <EmptyHint text="Nada registrado neste mês." />
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {itens.map((t) => (
+                <div key={t.id} className="flex items-center justify-between py-3">
+                  <span className="text-xs font-semibold text-[#1F1438] truncate min-w-0">
+                    {t.descricao}
                   </span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs font-black tabular-nums text-rose-600">
+                      − {formatBRLPublic(t.valor)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => navigate('/nova-transacao')}
+                      className="p-1 text-gray-400 hover:text-[#6639A6] transition"
+                      title="Editar lançamento"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onDelete(t.id)}
+                      className="p-1 text-gray-400 hover:text-red-500 transition"
+                      title="Excluir lançamento"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
 
-                  {isCartao && showEyeForCardInstallments && (
+              {qtdeLancamentosCartao > 0 && (
+                <div className="flex items-center justify-between py-3">
+                  <span className="text-xs font-semibold text-[#1F1438]">
+                    Cartões ({qtdeLancamentosCartao}{' '}
+                    {qtdeLancamentosCartao === 1 ? 'lançamento' : 'lançamentos'})
+                  </span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs font-black tabular-nums text-rose-600">
+                      − {formatBRLPublic(totalCartoes)}
+                    </span>
                     <button
                       type="button"
                       onClick={() => navigate('/cartoes')}
                       className="p-1 text-gray-400 hover:text-[#6639A6] transition"
-                      title="Ver no cartão"
+                      title="Ver gasto por cartão"
                     >
                       <Eye className="w-4 h-4" />
                     </button>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={() => navigate('/nova-transacao')}
-                    className="p-1 text-gray-400 hover:text-[#6639A6] transition"
-                    title="Editar lançamento"
-                  >
-                    <Pencil className="w-3.5 h-3.5" />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => onDelete(t.id)}
-                    className="p-1 text-gray-400 hover:text-red-500 transition"
-                    title="Excluir lançamento"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  </div>
                 </div>
+              )}
+            </div>
+          )}
+        </>
+      ) : /* Entradas: uma linha por lançamento */
+      itens.length === 0 ? (
+        <EmptyHint text="Nada registrado neste mês." />
+      ) : (
+        <div className="divide-y divide-gray-100">
+          {itens.map((t) => (
+            <div key={t.id} className="flex items-center justify-between py-3">
+              <span className="text-xs font-semibold text-[#1F1438] truncate min-w-0">
+                {t.descricao}
+              </span>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-xs font-black tabular-nums text-emerald-600">
+                  + {formatBRLPublic(t.valor)}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => navigate('/nova-transacao')}
+                  className="p-1 text-gray-400 hover:text-[#6639A6] transition"
+                  title="Editar lançamento"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onDelete(t.id)}
+                  className="p-1 text-gray-400 hover:text-red-500 transition"
+                  title="Excluir lançamento"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
               </div>
-            )
-          })}
+            </div>
+          ))}
         </div>
       )}
 

@@ -94,6 +94,27 @@ export const DashboardPage: React.FC = () => {
       <AppHeader />
 
       <main className="max-w-md mx-auto px-4 pt-4 space-y-4">
+        {/* Navegação de meses no topo — layout da v0.0.3 */}
+        <section className="bg-white rounded-3xl px-4 py-3 shadow-[0_4px_24px_rgba(102,57,166,0.06)] border border-[#EBE4F5] flex items-center justify-between">
+          <button
+            type="button"
+            onClick={() => setMonthOffset((m) => m - 1)}
+            className="p-2 rounded-xl hover:bg-purple-50 text-[#6639A6] transition"
+            aria-label="Mês anterior"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+          <span className="text-sm font-bold capitalize text-[#1F1438]">{monthLabel}</span>
+          <button
+            type="button"
+            onClick={() => setMonthOffset((m) => m + 1)}
+            className="p-2 rounded-xl hover:bg-purple-50 text-[#6639A6] transition"
+            aria-label="Próximo mês"
+          >
+            <ChevronRight className="w-5 h-5" />
+          </button>
+        </section>
+
         <section className="bg-white rounded-3xl p-5 shadow-[0_4px_24px_rgba(102,57,166,0.06)] border border-[#EBE4F5]">
           <h2 className="text-base font-black text-[#1F1438] mb-2">Gastos por Categoria</h2>
           {loading ? (
@@ -152,29 +173,6 @@ export const DashboardPage: React.FC = () => {
           />
         )}
       </main>
-
-      {/* Rodapé de navegação de mês */}
-      <footer className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-[#E5DEEE] py-2 shadow-[0_-4px_20px_rgba(102,57,166,0.06)]">
-        <div className="max-w-md mx-auto flex items-center justify-between px-4">
-          <button
-            type="button"
-            onClick={() => setMonthOffset((m) => m - 1)}
-            className="p-2 rounded-xl hover:bg-purple-50 text-[#6639A6] transition"
-            aria-label="Mês anterior"
-          >
-            <ChevronLeft className="w-5 h-5" />
-          </button>
-          <span className="text-sm font-bold capitalize text-[#1F1438]">{monthLabel}</span>
-          <button
-            type="button"
-            onClick={() => setMonthOffset((m) => m + 1)}
-            className="p-2 rounded-xl hover:bg-purple-50 text-[#6639A6] transition"
-            aria-label="Próximo mês"
-          >
-            <ChevronRight className="w-5 h-5" />
-          </button>
-        </div>
-      </footer>
 
       <BottomNav />
     </div>
