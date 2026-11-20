@@ -18,7 +18,7 @@ export const PlansPage: React.FC = () => {
       badge: 'Básico',
       features: [
         { title: 'Controle de receitas e despesas', included: true },
-        { title: 'Contas bancárias, carteiras e cartões', included: true },
+        { title: 'Cartões de crédito com controle de fatura', included: true },
         { title: 'Categorias e gráfico de donut animado', included: true },
         { title: 'Extrato do mês atual e passados', included: true },
         { title: 'Despesas recorrentes fixas', included: false, reason: 'Apenas VIP e Premium' },

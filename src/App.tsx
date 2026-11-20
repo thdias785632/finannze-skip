@@ -13,7 +13,7 @@ import Layout from './components/Layout'
 // Páginas do Finanzze
 import { ExtractPage } from './pages/Extract'
 import { NewTransactionPage } from './pages/NewTransaction'
-import { AccountsPage } from './pages/Accounts'
+import { CartoesPage } from './pages/Cartoes'
 import { RecurringPage } from './pages/Recurring'
 import { RealEstatePage } from './pages/RealEstate'
 import { PlansPage } from './pages/Plans'
@@ -32,7 +32,7 @@ const App = () => (
             <Route element={<ProtectedRoute />}>
               <Route path="/extrato" element={<ExtractPage />} />
               <Route path="/nova-transacao" element={<NewTransactionPage />} />
-              <Route path="/contas" element={<AccountsPage />} />
+              <Route path="/cartoes" element={<CartoesPage />} />
               <Route path="/recorrentes" element={<RecurringPage />} />
               <Route path="/imoveis" element={<RealEstatePage />} />
               <Route path="/planos" element={<PlansPage />} />

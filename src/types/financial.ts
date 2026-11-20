@@ -10,14 +10,12 @@ export interface User {
   updated: string
 }
 
-export type TipoConta = 'carteira' | 'banco' | 'cartao'
-
-export interface Conta {
+export interface Cartao {
   id: string
   user_id: string
   nome: string
-  tipo: TipoConta
-  saldo: number
+  /** Dia do mês (1-31) do vencimento da fatura. Compras no dia do vencimento ou depois caem na fatura do mês seguinte. */
+  dia_vencimento: number
   cor?: string
   created: string
   updated: string
@@ -43,13 +41,13 @@ export interface Transacao {
   valor: number
   tipo: TipoTransacao
   data: string
-  conta_id: string
+  cartao_id?: string
   categoria_id?: string
   recorrente?: boolean
   recorrencia_periodo?: 'mensal' | 'anual'
   pago?: boolean
   expand?: {
-    conta_id?: Conta
+    cartao_id?: Cartao
     categoria_id?: Categoria
   }
   created: string

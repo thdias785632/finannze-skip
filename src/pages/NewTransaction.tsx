@@ -3,10 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { AppHeader } from '@/components/AppHeader'
 import { BottomNav } from '@/components/BottomNav'
 import { transacoesService } from '@/services/transacoes'
-import { contasService } from '@/services/contas'
+import { cartoesService } from '@/services/cartoes'
 import { categoriasService } from '@/services/categorias'
 import { useAuth } from '@/context/AuthContext'
-import type { Conta, Categoria, TipoTransacao } from '@/types/financial'
+import type { Cartao, Categoria, TipoTransacao } from '@/types/financial'
 import {
   TrendingDown,
   TrendingUp,
@@ -15,7 +15,7 @@ import {
   Lock,
   Sparkles,
   Tag,
-  Landmark,
+  CreditCard,
   Plus,
 } from 'lucide-react'
 import { toast } from '@/hooks/use-toast'
@@ -28,12 +28,12 @@ export const NewTransactionPage: React.FC = () => {
   const [descricao, setDescricao] = useState('')
   const [valorStr, setValorStr] = useState('')
   const [dataStr, setDataStr] = useState(() => new Date().toISOString().slice(0, 10))
-  const [contaId, setContaId] = useState('')
+  const [cartaoId, setCartaoId] = useState('')
   const [categoriaId, setCategoriaId] = useState('')
   const [recorrente, setRecorrente] = useState(false)
   const [recorrenciaPeriodo, setRecorrenciaPeriodo] = useState<'mensal' | 'anual'>('mensal')
 
-  const [contas, setContas] = useState<Conta[]>([])
+  const [cartoes, setCartoes] = useState<Cartao[]>([])
   const [categorias, setCategorias] = useState<Categoria[]>([])
   const [loading, setLoading] = useState(false)
 
@@ -43,9 +43,9 @@ export const NewTransactionPage: React.FC = () => {
   const [newCatCor, setNewCatCor] = useState('#8B5CF6')
 
   useEffect(() => {
-    Promise.all([contasService.list(), categoriasService.list()]).then(([cts, cats]) => {
-      setContas(cts)
-      if (cts.length > 0) setContaId(cts[0].id)
+    Promise.all([cartoesService.list(), categoriasService.list()]).then(([cts, cats]) => {
+      setCartoes(cts)
+      if (cts.length > 0) setCartaoId(cts[0].id)
       setCategorias(cats)
       if (cats.length > 0) setCategoriaId(cats[0].id)
     })
@@ -82,10 +82,7 @@ export const NewTransactionPage: React.FC = () => {
       toast({ variant: 'destructive', title: 'Informe um valor válido' })
       return
     }
-    if (!contaId) {
-      toast({ variant: 'destructive', title: 'Selecione uma conta' })
-      return
-    }
+    // Cartão é opcional: despesas em dinheiro/débito/boleto não têm cartão.
 
     if (recorrente && !canAccessRecurring) {
       toast({
@@ -103,7 +100,7 @@ export const NewTransactionPage: React.FC = () => {
         valor: parsedValor,
         tipo,
         data: dataStr,
-        conta_id: contaId,
+        cartao_id: cartaoId || undefined,
         categoria_id: categoriaId || undefined,
         recorrente: recorrente && canAccessRecurring,
         recorrencia_periodo: recorrente ? recorrenciaPeriodo : undefined,
@@ -112,7 +109,10 @@ export const NewTransactionPage: React.FC = () => {
 
       toast({
         title: 'Transação adicionada!',
-        description: 'Sua conta e extrato foram atualizados.',
+        description:
+          tipo === 'despesa' && cartaoId
+            ? 'Lançada no extrato. Se for a partir do vencimento, cai na fatura do mês seguinte.'
+            : 'Seu extrato foi atualizado.',
       })
       navigate('/')
     } catch (err) {
@@ -222,37 +222,39 @@ export const NewTransactionPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Conta de Pagamento / Depósito */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1 flex items-center justify-between">
-              <span className="flex items-center gap-1">
-                <Landmark className="w-3.5 h-3.5 text-[#6639A6]" />
-                Conta / Cartão
-              </span>
-              <button
-                type="button"
-                onClick={() => navigate('/contas')}
-                className="text-[11px] text-[#6639A6] hover:underline"
+          {/* Cartão (opcional para receitas) */}
+          {cartoes.length > 0 && (
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1 flex items-center justify-between">
+                <span className="flex items-center gap-1">
+                  <CreditCard className="w-3.5 h-3.5 text-[#6639A6]" />
+                  Cartão
+                </span>
+                <button
+                  type="button"
+                  onClick={() => navigate('/cartoes')}
+                  className="text-[11px] text-[#6639A6] hover:underline"
+                >
+                  Gerenciar
+                </button>
+              </label>
+              <select
+                value={cartaoId}
+                onChange={(e) => setCartaoId(e.target.value)}
+                className="w-full h-11 px-3.5 rounded-2xl border border-[#D9CDEB] bg-white text-sm text-[#1F1438] focus:outline-none focus:border-[#6639A6] transition"
               >
-                Gerenciar
-              </button>
-            </label>
-            <select
-              value={contaId}
-              onChange={(e) => setContaId(e.target.value)}
-              required
-              className="w-full h-11 px-3.5 rounded-2xl border border-[#D9CDEB] bg-white text-sm text-[#1F1438] focus:outline-none focus:border-[#6639A6] transition"
-            >
-              {contas.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.nome} ({c.tipo}) • Saldo:{' '}
-                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
-                    c.saldo,
-                  )}
-                </option>
-              ))}
-            </select>
-          </div>
+                <option value="">Sem cartão (dinheiro / débito / boleto)</option>
+                {cartoes.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nome} • Vence dia {c.dia_vencimento}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[10px] text-gray-500 mt-1">
+                Gastos no dia do vencimento ou depois entram na fatura do mês seguinte.
+              </p>
+            </div>
+          )}
 
           {/* Categoria */}
           <div>

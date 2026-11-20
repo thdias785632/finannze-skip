@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-20T21:53:02.584Z",
+  "generatedAt": "2026-11-20T22:21:16.715Z",
   "collections": [
     {
       "name": "users",
@@ -112,66 +112,6 @@
       "indexes": ["CREATE INDEX idx_categorias_user ON categorias (user_id)"]
     },
     {
-      "name": "contas",
-      "type": "base",
-      "apiRules": {
-        "list": "@request.auth.id != '' && user_id = @request.auth.id",
-        "view": "@request.auth.id != '' && user_id = @request.auth.id",
-        "create": "@request.auth.id != '' && @request.body.user_id = @request.auth.id",
-        "update": "@request.auth.id != '' && user_id = @request.auth.id",
-        "delete": "@request.auth.id != '' && user_id = @request.auth.id"
-      },
-      "fields": [
-        {
-          "name": "user_id",
-          "type": "relation",
-          "required": true,
-          "system": false,
-          "collectionRef": "users"
-        },
-        {
-          "name": "nome",
-          "type": "text",
-          "required": true,
-          "system": false
-        },
-        {
-          "name": "tipo",
-          "type": "select",
-          "required": true,
-          "system": false,
-          "selectValues": ["carteira", "banco", "cartao"]
-        },
-        {
-          "name": "saldo",
-          "type": "number",
-          "required": true,
-          "system": false
-        },
-        {
-          "name": "cor",
-          "type": "text",
-          "required": false,
-          "system": false
-        },
-        {
-          "name": "created",
-          "type": "autodate",
-          "required": false,
-          "system": false,
-          "autodateTriggers": ["onCreate"]
-        },
-        {
-          "name": "updated",
-          "type": "autodate",
-          "required": false,
-          "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
-        }
-      ],
-      "indexes": ["CREATE INDEX idx_contas_user ON contas (user_id)"]
-    },
-    {
       "name": "transacoes",
       "type": "base",
       "apiRules": {
@@ -215,13 +155,6 @@
           "system": false
         },
         {
-          "name": "conta_id",
-          "type": "relation",
-          "required": true,
-          "system": false,
-          "collectionRef": "contas"
-        },
-        {
           "name": "categoria_id",
           "type": "relation",
           "required": false,
@@ -260,12 +193,16 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "cartao_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "cartoes"
         }
       ],
-      "indexes": [
-        "CREATE INDEX idx_transacoes_user_data ON transacoes (user_id, data DESC)",
-        "CREATE INDEX idx_transacoes_conta ON transacoes (conta_id)"
-      ]
+      "indexes": ["CREATE INDEX idx_transacoes_user_data ON transacoes (user_id, data DESC)"]
     },
     {
       "name": "imoveis",
@@ -485,6 +422,59 @@
         }
       ],
       "indexes": ["CREATE INDEX idx_parcelas_imovel ON imovel_parcelas (imovel_id)"]
+    },
+    {
+      "name": "cartoes",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && user_id = @request.auth.id",
+        "view": "@request.auth.id != '' && user_id = @request.auth.id",
+        "create": "@request.auth.id != '' && @request.body.user_id = @request.auth.id",
+        "update": "@request.auth.id != '' && user_id = @request.auth.id",
+        "delete": "@request.auth.id != '' && user_id = @request.auth.id"
+      },
+      "fields": [
+        {
+          "name": "user_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "dia_vencimento",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "cor",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": ["CREATE INDEX idx_cartoes_user ON cartoes (user_id)"]
     }
   ]
 }

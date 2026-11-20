@@ -2,33 +2,17 @@ import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { AppHeader } from '@/components/AppHeader'
 import { BottomNav } from '@/components/BottomNav'
-import { DonutChart } from '@/components/DonutChart'
-import { contasService } from '@/services/contas'
+import { DonutChart, type DonutSlice } from '@/components/DonutChart'
 import { transacoesService } from '@/services/transacoes'
-import { categoriasService } from '@/services/categorias'
-import type { Conta, Transacao, Categoria } from '@/types/financial'
-import {
-  Wallet,
-  TrendingUp,
-  TrendingDown,
-  ChevronRight,
-  PlusCircle,
-  Eye,
-  EyeOff,
-  Landmark,
-  CreditCard,
-  Building2,
-  Calendar,
-} from 'lucide-react'
+import type { Transacao } from '@/types/financial'
+import { TrendingUp, TrendingDown, ChevronRight, Eye, EyeOff, CreditCard } from 'lucide-react'
 
 export const DashboardPage: React.FC = () => {
-  const [contas, setContas] = useState<Conta[]>([])
   const [transacoes, setTransacoes] = useState<Transacao[]>([])
-  const [categorias, setCategorias] = useState<Categoria[]>([])
   const [loading, setLoading] = useState(true)
   const [showValues, setShowValues] = useState(true)
 
-  // Mês atual formato "YYYY-MM"
+  // Mês atual formato "YYYY-MM" (mês de fatura: a Home usa a mesma regra do extrato)
   const now = new Date()
   const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   const monthName = now.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
@@ -36,14 +20,9 @@ export const DashboardPage: React.FC = () => {
   const loadData = async () => {
     try {
       setLoading(true)
-      const [contasList, txList, catList] = await Promise.all([
-        contasService.list(),
-        transacoesService.list({ mes: currentMonthStr }),
-        categoriasService.list(),
-      ])
-      setContas(contasList)
+      // `list({ mes })` já aplica a regra do vencimento (fatura do mês seguinte)
+      const txList = await transacoesService.list({ mes: currentMonthStr })
       setTransacoes(txList)
-      setCategorias(catList)
     } catch (err) {
       console.error('Erro ao carregar dados do dashboard:', err)
     } finally {
@@ -55,12 +34,7 @@ export const DashboardPage: React.FC = () => {
     loadData()
   }, [])
 
-  // Cálculos do resumo
-  const saldoTotal = contas.reduce((acc, c) => acc + (c.tipo === 'cartao' ? 0 : c.saldo), 0)
-  const faturaCartao = contas
-    .filter((c) => c.tipo === 'cartao')
-    .reduce((acc, c) => acc + Math.abs(c.saldo), 0)
-
+  // Cálculos do resumo — Saldo do mês = receitas - despesas da fatura atual
   const receitasMes = transacoes
     .filter((t) => t.tipo === 'receita')
     .reduce((acc, t) => acc + t.valor, 0)
@@ -69,11 +43,10 @@ export const DashboardPage: React.FC = () => {
     .filter((t) => t.tipo === 'despesa')
     .reduce((acc, t) => acc + t.valor, 0)
 
-  const resultadoMes = receitasMes - despesasMes
+  const saldoDoMes = receitasMes - despesasMes
 
   // Agrupamento por categoria para o Donut
   const catMap = new Map<string, { nome: string; cor: string; valor: number }>()
-  categorias.forEach((c) => catMap.set(c.id, { nome: c.nome, cor: c.cor, valor: 0 }))
 
   transacoes
     .filter((t) => t.tipo === 'despesa')
@@ -91,13 +64,10 @@ export const DashboardPage: React.FC = () => {
       }
     })
 
-  const donutData = Array.from(catMap.values())
+  const donutData: DonutSlice[] = Array.from(catMap.values())
     .filter((c) => c.valor > 0)
     .sort((a, b) => b.valor - a.valor)
-    .map((c) => ({
-      ...c,
-      percentual: despesasMes > 0 ? (c.valor / despesasMes) * 100 : 0,
-    }))
+    .map((c) => ({ label: c.nome, value: c.valor, color: c.cor }))
 
   const formatBRL = (val: number) => {
     if (!showValues) return '••••••'
@@ -114,7 +84,7 @@ export const DashboardPage: React.FC = () => {
           <div className="absolute right-0 top-0 translate-x-12 -translate-y-8 w-44 h-44 bg-white/10 rounded-full blur-2xl pointer-events-none" />
 
           <div className="flex items-center justify-between text-white/80 text-xs mb-1.5">
-            <span className="font-medium tracking-wide">Saldo Total em Contas</span>
+            <span className="font-medium tracking-wide capitalize">Saldo do mês</span>
             <button
               type="button"
               onClick={() => setShowValues(!showValues)}
@@ -126,7 +96,7 @@ export const DashboardPage: React.FC = () => {
           </div>
 
           <div className="text-3xl font-black tracking-tight mb-4 text-white">
-            {formatBRL(saldoTotal)}
+            {formatBRL(saldoDoMes)}
           </div>
 
           {/* Cards de Resumo Receitas / Despesas */}
@@ -149,83 +119,32 @@ export const DashboardPage: React.FC = () => {
           </div>
         </section>
 
-        {/* Donut de Categorias Animado do Mês */}
+        {/* Donut de Categorias — igual ao do projeto original */}
         <section className="bg-white rounded-3xl p-5 shadow-[0_4px_24px_rgba(102,57,166,0.06)] border border-[#EBE4F5]">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-[#6639A6]" />
-              <h2 className="text-sm font-bold text-[#1F1438] capitalize">{monthName}</h2>
-            </div>
-            <Link
-              to="/extrato"
-              className="text-xs text-[#6639A6] font-bold hover:underline inline-flex items-center gap-0.5"
-            >
-              Extrato
-              <ChevronRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
+          <h2 className="text-base font-black text-[#1F1438] mb-2">Gastos por categoria</h2>
 
-          <DonutChart data={donutData} total={despesasMes} />
+          <DonutChart centerLabel="Renda" centerValue={receitasMes} slices={donutData} />
         </section>
 
-        {/* Visão de Contas Rápidas */}
+        {/* Atalho para Cartões */}
         <section className="bg-white rounded-3xl p-5 shadow-[0_4px_24px_rgba(102,57,166,0.06)] border border-[#EBE4F5]">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <Landmark className="w-4 h-4 text-[#6639A6]" />
-              <h2 className="text-sm font-bold text-[#1F1438]">Minhas Contas</h2>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-[#6639A6]/10 text-[#6639A6]">
+                <CreditCard className="w-4.5 h-4.5" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-gray-900 leading-tight">Meus Cartões</p>
+                <p className="text-[10px] text-gray-500">Gerencie os vencimentos das faturas</p>
+              </div>
             </div>
             <Link
-              to="/contas"
+              to="/cartoes"
               className="text-xs text-[#6639A6] font-bold hover:underline inline-flex items-center gap-0.5"
             >
-              Ver todas ({contas.length})
+              Ver cartões
               <ChevronRight className="w-3.5 h-3.5" />
             </Link>
-          </div>
-
-          <div className="space-y-2">
-            {contas.slice(0, 3).map((conta) => (
-              <div
-                key={conta.id}
-                className="flex items-center justify-between p-2.5 rounded-2xl bg-[#FBF9FD] border border-[#EBE4F5] hover:bg-purple-50/50 transition"
-              >
-                <div className="flex items-center gap-2.5">
-                  <div
-                    className="w-9 h-9 rounded-xl flex items-center justify-center text-white"
-                    style={{ backgroundColor: conta.cor || '#6639A6' }}
-                  >
-                    {conta.tipo === 'cartao' ? (
-                      <CreditCard className="w-4 h-4" />
-                    ) : conta.tipo === 'carteira' ? (
-                      <Wallet className="w-4 h-4" />
-                    ) : (
-                      <Landmark className="w-4 h-4" />
-                    )}
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-gray-900 leading-tight">{conta.nome}</p>
-                    <p className="text-[10px] text-gray-500 capitalize">{conta.tipo}</p>
-                  </div>
-                </div>
-
-                <div className="text-right">
-                  <p
-                    className={`text-xs font-bold ${
-                      conta.saldo < 0 ? 'text-rose-600' : 'text-gray-900'
-                    }`}
-                  >
-                    {formatBRL(conta.saldo)}
-                  </p>
-                </div>
-              </div>
-            ))}
-
-            {contas.length === 0 && !loading && (
-              <div className="text-center py-4 text-xs text-gray-400">
-                Nenhuma conta cadastrada ainda.
-              </div>
-            )}
           </div>
         </section>
 

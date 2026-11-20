@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { AppHeader } from '@/components/AppHeader'
 import { BottomNav } from '@/components/BottomNav'
-import { transacoesService } from '@/services/transacoes'
+import { transacoesService, rotuloFatura } from '@/services/transacoes'
 import { useAuth } from '@/context/AuthContext'
 import type { Transacao } from '@/types/financial'
 import {
@@ -111,7 +111,7 @@ export const ExtractPage: React.FC = () => {
             <span className="text-sm font-black capitalize text-[#1F1438]">{monthLabel}</span>
             {monthOffset === 0 && (
               <span className="text-[10px] font-bold uppercase tracking-wider text-[#6639A6]">
-                Mês Atual
+                {rotuloFatura(monthStr)}
               </span>
             )}
             {isFutureMonth && (
