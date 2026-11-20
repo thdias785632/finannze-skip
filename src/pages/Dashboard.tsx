@@ -115,6 +115,19 @@ export const DashboardPage: React.FC = () => {
           </button>
         </section>
 
+        {/* Saldo do mês — card da v0.0.3 (antes "Saldo Total em contas",
+            adaptado para o modelo atual, sem contas) */}
+        <section className="bg-white rounded-3xl p-5 shadow-[0_4px_24px_rgba(102,57,166,0.06)] border border-[#EBE4F5]">
+          <span className="text-xs font-semibold text-gray-500">Saldo do mês</span>
+          <p
+            className={`mt-1 text-2xl font-black ${
+              totalReceitas - totalDespesas >= 0 ? 'text-emerald-600' : 'text-rose-600'
+            }`}
+          >
+            {formatBRLPublic(totalReceitas - totalDespesas)}
+          </p>
+        </section>
+
         <section className="bg-white rounded-3xl p-5 shadow-[0_4px_24px_rgba(102,57,166,0.06)] border border-[#EBE4F5]">
           <h2 className="text-base font-black text-[#1F1438] mb-2">Gastos por Categoria</h2>
           {loading ? (
