@@ -87,9 +87,8 @@ export const DashboardPage: React.FC = () => {
   const receitas = useMemo(() => transacoes.filter((t) => t.tipo === 'receita'), [transacoes])
   const despesas = useMemo(() => transacoes.filter((t) => t.tipo === 'despesa'), [transacoes])
   const totalReceitas = receitas.reduce((acc, t) => acc + t.valor, 0)
-  let totalDespesas = despesas.reduce((acc, t) => acc + t.valor, 0)
+  const totalDespesas = despesas.reduce((acc, t) => acc + t.valor, 0)
   const saldo = totalReceitas - totalDespesas
-  totalDespesas = totalDespesas + totalReceitas
   // Agrupa despesas por categoria (lógica do dashboard-chart original) e
   // acrescenta a "Economia" — categoria calculada, não lançável: entradas − saídas.
   const donutData: DonutSlice[] = useMemo(() => {
@@ -147,27 +146,6 @@ export const DashboardPage: React.FC = () => {
       <AppHeader />
 
       <main className="max-w-md mx-auto px-4 pt-4 space-y-4">
-        {/* Navegação de meses — igual ao original */}
-        <section className="finz-card finz-month-nav">
-          <button
-            type="button"
-            onClick={() => setMonthOffset((m) => m - 1)}
-            className="finz-month-arrow"
-            aria-label="Mês anterior"
-          >
-            <ChevronLeft className="w-5 h-5" />
-          </button>
-          <span className="finz-month-label">{monthLabel}</span>
-          <button
-            type="button"
-            onClick={() => setMonthOffset((m) => m + 1)}
-            className="finz-month-arrow"
-            aria-label="Próximo mês"
-          >
-            <ChevronRight className="w-5 h-5" />
-          </button>
-        </section>
-
         {/* Resumo do mês — card roxo com saldo, entradas e saídas (hero do original) */}
         <section className="finz-hero" aria-label="Resumo do mês">
           <div className="finz-hero-top">
@@ -261,7 +239,7 @@ export const DashboardPage: React.FC = () => {
           ) : (
             <DonutChart
               centerLabel="Total"
-              centerValue={totalDespesas}
+              centerValue={totalReceitas}
               slices={donutData}
               onSelectSlice={(id) => setCatDetalhe((prev) => (prev === id ? null : id))}
               selectedId={catDetalhe}
