@@ -39,7 +39,7 @@ export const CategoryDetail: React.FC<CategoryDetailProps> = ({
       </div>
 
       <p className="text-[11px] text-gray-500 mb-3">
-        {pct}% dos gastos deste mês •{' '}
+        {pct}% da sua renda deste mês •{' '}
         <strong className="text-[#1F1438]">{formatBRLPublic(valor)}</strong>
       </p>
 

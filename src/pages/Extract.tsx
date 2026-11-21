@@ -293,7 +293,7 @@ export const ExtractPage: React.FC = () => {
             <div className="finz-chart-item">
               <DonutChart
                 centerLabel="Total"
-                centerValue={totalDespesas}
+                centerValue={totalReceitas}
                 slices={donutData}
                 onSelectSlice={(id) => setCatDetalhe(catDetalhe === id ? null : id)}
                 selectedId={catDetalhe}
