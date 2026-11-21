@@ -3,10 +3,28 @@ import type { Imovel, ParcelaFluxo, FluxoImovel } from '@/types/financial'
 /**
  * Cálculo de correção INCC para os fluxos de um imóvel.
  *
- * - Cada parcela usa o INCC do seu `mes_base` (vencimento − defasagem do imóvel).
- * - Índices já divulgados (série SGS 192 do Banco Central) são os valores reais.
- * - Índices ainda não divulgados são estimados pela MÉDIA do INCC do ano
- *   corrente — o valor mostrado é aproximado e isso é sinalizado na UI.
+ * REGRA DE NEGÓCIO (fonte da verdade — definida pelo usuário):
+ *
+ * 1. CARREGO = número de meses entre a assinatura do contrato do imóvel
+ *    (mês-base) e o mês de vencimento da parcela.
+ *    Ex.: contrato nov/2026, parcela jan/2027 → 2 meses de carrego.
+ *
+ * 2. TRAVA DE PREVISIBILIDADE: a taxa de referência de cada parcela é SEMPRE
+ *    o INCC do mês 2 MESES ANTES do vencimento (não 1, não configurável).
+ *    Parcela jan/2027 → INCC de nov/2026, aplicado × 2 (os 2 meses de carrego).
+ *    Quando o INCC de nov/2026 for divulgado, o fluxo de jan/2027 fica
+ *    DEFINITIVO (nov × 2, sem estimativa) — e a parcela de dez/2027 passa a
+ *    usar o INCC de novembro também, e assim por diante.
+ *
+ * 3. FALLBACK: se o índice mensal de referência ainda NÃO existe no banco,
+ *    usa a MÉDIA do INCC do ano corrente como estimativa e marca o valor como
+ *    ESTIMADO (valor aproximado até existirem todos os índices reais).
+ *
+ * 4. Fórmula: correção = valor_base × (taxa_referência × meses_de_carrego)
+ *    Ex.: 8000 × (0,61% × 2) ≈ R$ 97,60.
+ *
+ * 5. Os índices vêm da API pública do Banco Central (série SGS 192, INCC) e
+ *    ficam gravados na coleção `indices_incc` do PocketBase.
  */
 
 export interface IndiceINCC {
@@ -15,18 +33,26 @@ export interface IndiceINCC {
 
 export interface ParcelaCalculada {
   parcela: ParcelaFluxo
-  /** Índices aplicados (reais e estimados) até a parcela ficar corrigida. */
-  fatores: { mes: string; variacao: number; estimado: boolean }[]
+  /** Taxa de referência aplicada (única, trava de 2 meses antes do vencimento). */
+  taxaReferencia: { mes: string; variacao: number; estimado: boolean } | null
   /** fator de correção total aplicado (1.0 = sem correção) */
   fator: number
   /** valor base da parcela (sem correção) */
   valorBase: number
-  /** valor corrigido (real quando todos os índices existem; estimado caso contrário) */
+  /** correção monetária em R$ (valorCorrigido − valorBase) */
+  correcao: number
+  /** valor corrigido (real quando o índice de referência existe; estimado caso contrário) */
   valorCorrigido: number
-  /** true quando algum índice ainda não foi divulgado (valor é estimativa) */
+  /** true quando o índice de referência ainda não foi divulgado (valor é estimativa) */
   estimado: boolean
-  /** média mensal usada na estimativa, quando aplicável */
-  mediaUsada?: number
+  /** taxa mensal aplicada em % (real ou estimada pela média) */
+  taxaUsada: number
+  /** mês de vencimento da parcela, "YYYY-MM" */
+  mesVenc: string
+  /** meses de carrego: meses entre a assinatura do contrato e o vencimento */
+  mesesCarrego: number
+  /** mês de referência da taxa, "YYYY-MM" (vencimento − 2) */
+  mesReferencia: string
 }
 
 export interface FluxoCalculado {
@@ -56,6 +82,9 @@ export interface ImovelCalculado {
   estimado: boolean
 }
 
+/** trava de previsibilidade: a taxa é sempre a de 2 meses antes do vencimento */
+export const TRAVA_INCC_MESES = 2
+
 /** mês atual no formato "YYYY-MM" */
 export const mesAtual = (): string => {
   const d = new Date()
@@ -68,9 +97,31 @@ export const mesAnterior = (mes: string, n = 1): string => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
+/** diferença em meses entre dois meses "YYYY-MM" (ate − de) */
+export const diferencaMeses = (de: string, ate: string): number => {
+  const [y1, m1] = de.split('-').map(Number)
+  const [y2, m2] = ate.split('-').map(Number)
+  return y2 * 12 + m2 - (y1 * 12 + m1)
+}
+
 /**
- * Média do INCC do ANO CORRENTE — usada como estimativa para índices
- * que o Banco Central ainda não divulgou.
+ * Mês-base do contrato (assinatura) em "YYYY-MM": prioriza `mes_base_incc`
+ * e cai para a data do contrato quando o campo não foi preenchido.
+ */
+export const mesBaseContrato = (imovel: Imovel): string => {
+  if (imovel.mes_base_incc) return imovel.mes_base_incc.slice(0, 7)
+  if (imovel.data_contrato) {
+    const d = new Date(imovel.data_contrato)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  }
+  return ''
+}
+
+/**
+ * Média do INCC do ANO CORRENTE — usada como estimativa para índices que o
+ * Banco Central ainda não divulgou. Calculada dinamicamente dos índices reais
+ * já gravados no banco; quando o ano corrente ainda não tem nenhum índice,
+ * usa a média dos últimos 12 índices disponíveis (nunca valor fixo).
  */
 export const mediaInccAnoCorrente = (indices: IndiceINCC): number => {
   const ano = new Date().getFullYear()
@@ -79,29 +130,25 @@ export const mediaInccAnoCorrente = (indices: IndiceINCC): number => {
     const chave = `${ano}-${String(m).padStart(2, '0')}`
     if (indices[chave] != null) vars.push(indices[chave])
   }
-  if (vars.length === 0) return 0
-  return vars.reduce((a, b) => a + b, 0) / vars.length
-}
+  if (vars.length > 0) return vars.reduce((a, b) => a + b, 0) / vars.length
 
-/** Lista de meses entre `de` e `ate` (inclusivos), "YYYY-MM". */
-const mesesEntre = (de: string, ate: string): string[] => {
-  const lista: string[] = []
-  let atual = de
-  let guard = 0
-  while (atual <= ate && guard < 1200) {
-    lista.push(atual)
-    const [y, m] = atual.split('-').map(Number)
-    const d = new Date(y, m - 1 + 1, 1)
-    atual = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-    guard++
-  }
-  return lista
+  // Fallback: últimos 12 índices reais disponíveis (mais recentes primeiro)
+  const maisRecentes = Object.keys(indices)
+    .filter((k) => indices[k] != null)
+    .sort()
+    .slice(-12)
+  if (maisRecentes.length === 0) return 0
+  return maisRecentes.reduce((s, k) => s + indices[k], 0) / maisRecentes.length
 }
 
 /**
- * Corrige um valor do `mesBase` até o mês em que a parcela fica "fechada"
- * (vencimento − defasagem), multiplicando os INCCs do período.
- * Índices inexistentes usam a média do ano corrente (estimativa).
+ * Corrige uma parcela pela regra do INCC com trava de 2 meses:
+ *
+ *   mesesCarrego  = meses entre a assinatura do contrato e o vencimento
+ *   mesReferencia = vencimento − 2 (TRAVA, sempre 2)
+ *   taxa          = INCC real de mesReferencia, ou a média do ano corrente
+ *                   quando o índice ainda não existe (estimado)
+ *   correção      = valor_base × (taxa × mesesCarrego)
  */
 export const calcularParcela = (
   parcela: ParcelaFluxo,
@@ -109,45 +156,36 @@ export const calcularParcela = (
   indices: IndiceINCC,
   mediaAnoCorrente: number,
 ): ParcelaCalculada => {
-  const defasagem = imovel.defasagem_incc ?? imovel.defasagem_meses ?? 2
   const venc = new Date(parcela.vencimento)
   const mesVenc = `${venc.getFullYear()}-${String(venc.getMonth() + 1).padStart(2, '0')}`
-  // Mês em que a parcela é "fechada" (valor fixado), já com a defasagem aplicada
-  const mesFechamento = mesAnterior(mesVenc, defasagem)
 
-  // INCC é aplicado do mês base do contrato até o mês de fechamento
-  const inicio = parcela.mes_base || imovel.mes_base_incc
-  const fatores: ParcelaCalculada['fatores'] = []
-  let fator = 1
-  let estimado = false
-  let somaEstimadas = 0
-  let qtdeEstimadas = 0
+  // TRAVA: referência sempre 2 meses antes do vencimento
+  const mesReferencia = mesAnterior(mesVenc, TRAVA_INCC_MESES)
 
-  if (inicio && inicio <= mesFechamento) {
-    for (const mes of mesesEntre(inicio, mesFechamento)) {
-      const real = indices[mes]
-      if (real != null) {
-        fator *= 1 + real / 100
-        fatores.push({ mes, variacao: real, estimado: false })
-      } else {
-        fator *= 1 + mediaAnoCorrente / 100
-        fatores.push({ mes, variacao: mediaAnoCorrente, estimado: true })
-        estimado = true
-        somaEstimadas += mediaAnoCorrente
-        qtdeEstimadas++
-      }
-    }
-  }
+  // CARREGO: meses entre a assinatura do contrato e o vencimento
+  const assinatura = mesBaseContrato(imovel)
+  const mesesCarrego = assinatura && assinatura < mesVenc ? diferencaMeses(assinatura, mesVenc) : 0
 
   const valorBase = parcela.valor_base
+  const real = indices[mesReferencia]
+  const existeIndice = real != null
+
+  const taxaUsada = existeIndice ? real : mediaAnoCorrente
+  const fator = 1 + (taxaUsada / 100) * mesesCarrego
+  const valorCorrigido = valorBase * fator
+
   return {
     parcela,
-    fatores,
+    taxaReferencia: { mes: mesReferencia, variacao: taxaUsada, estimado: !existeIndice },
     fator,
     valorBase,
-    valorCorrigido: valorBase * fator,
-    estimado,
-    mediaUsada: qtdeEstimadas > 0 ? somaEstimadas / qtdeEstimadas : undefined,
+    correcao: valorCorrigido - valorBase,
+    valorCorrigido,
+    estimado: !existeIndice && mesesCarrego > 0,
+    taxaUsada,
+    mesVenc,
+    mesesCarrego,
+    mesReferencia,
   }
 }
 

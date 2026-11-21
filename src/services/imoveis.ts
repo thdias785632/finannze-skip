@@ -1,5 +1,6 @@
 import type { Imovel, FluxoImovel, ParcelaFluxo, ImovelCalculoINCC } from '@/types/financial'
 import pb from '@/lib/pocketbase/client'
+import { TRAVA_INCC_MESES, mesAnterior } from '@/lib/incc'
 
 const mapImovel = (r: Record<string, unknown>): Imovel => {
   const rec = r as Record<string, string | number | boolean>
@@ -110,14 +111,15 @@ export const imoveisService = {
       d.setMonth(primeiro.getMonth() + i)
       const y = d.getFullYear()
       const m = String(d.getMonth() + 1).padStart(2, '0')
-      const ref = new Date(d.getFullYear(), d.getMonth() - dados.defasagemIncc, 1)
-      const mesBase = `${ref.getFullYear()}-${String(ref.getMonth() + 1).padStart(2, '0')}`
+      const venc = `${y}-${m}`
+      // TRAVA de previsibilidade: mês de referência é sempre vencimento − 2
+      const mesBase = mesAnterior(venc, TRAVA_INCC_MESES)
       lista.push({
         user_id: userId,
         fluxo_id: fluxo.id,
         numero: i + 1,
         valor_base: dados.valorParcela,
-        vencimento: `${y}-${m}-01 12:00:00.000Z`,
+        vencimento: `${venc}-01 12:00:00.000Z`,
         mes_base: mesBase,
         pago: false,
       })

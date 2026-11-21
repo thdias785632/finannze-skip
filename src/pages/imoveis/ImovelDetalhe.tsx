@@ -18,7 +18,9 @@ import { useToast } from '@/hooks/use-toast'
 import { imoveisService } from '@/services/imoveis'
 import {
   calcularImovel,
+  mesBaseContrato,
   rotuloMes,
+  TRAVA_INCC_MESES,
   type IndiceINCC,
   type FluxoCalculado,
   type ParcelaCalculada,
@@ -115,10 +117,10 @@ export const ImovelDetalhe: React.FC = () => {
     }
   }
 
-  const refLabel = REF_MESES[defasagem] || `Referência: ${defasagem} meses antes do vencimento`
-  const exemploParcela = fluxosCalc?.fluxos
-    .flatMap((f) => f.parcelas)
-    .find((p) => p.parcela.mes_base)
+  const refLabel =
+    REF_MESES[TRAVA_INCC_MESES] || `Referência: ${TRAVA_INCC_MESES} meses antes do vencimento`
+  const assinatura = mesBaseContrato(imovel)
+  const exemploParcela = fluxosCalc?.fluxos.flatMap((f) => f.parcelas)[0]
 
   return (
     <div className="min-h-screen bg-[#F5F3F7] pb-24">
@@ -218,9 +220,9 @@ export const ImovelDetalhe: React.FC = () => {
           </div>
           <p className="text-xs text-gray-500 mb-3 flex items-start gap-1.5">
             <Info className="w-3.5 h-3.5 shrink-0 mt-0.5 text-[#6639A6]" />
-            {exemploParcela && exemploParcela.parcela.mes_base
-              ? `Parcela de ${rotuloMes(exemploParcela.parcela.vencimento.slice(0, 7))} usa o INCC de ${rotuloMes(exemploParcela.parcela.mes_base)}.`
-              : 'Cada parcela usa o INCC divulgado no mês de referência (vencimento menos a defasagem).'}
+            {exemploParcela
+              ? `Parcela de ${rotuloMes(exemploParcela.mesVenc)} usa o INCC de ${rotuloMes(exemploParcela.mesReferencia)} (trava: 2 meses antes do vencimento), aplicado × ${exemploParcela.mesesCarrego} ${exemploParcela.mesesCarrego === 1 ? 'mês' : 'meses'} de carrego desde ${rotuloMes(assinatura)}.`
+              : 'Cada parcela usa o INCC do mês 2 meses antes do seu vencimento, multiplicado pelos meses de carrego desde a assinatura do contrato.'}
           </p>
           <label className="text-xs font-semibold text-gray-600">Mês-base do contrato *</label>
           <input
@@ -273,8 +275,9 @@ export const ImovelDetalhe: React.FC = () => {
         {fluxosCalc?.estimado && (
           <p className="text-xs text-gray-500 mt-4 flex items-start gap-1.5">
             <Info className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-500" />
-            Valores com aviso de estimado usam a média do INCC de {new Date().getFullYear()} como
-            aproximação, até que os índices oficiais sejam divulgados.
+            Valores marcados como "Estimado" usam a média do INCC de {new Date().getFullYear()} como
+            aproximação e viram definitivos automaticamente quando o INCC real do mês de referência
+            (2 meses antes do vencimento) é divulgado.
           </p>
         )}
       </div>
@@ -329,7 +332,6 @@ const FluxoCard: React.FC<{
         <div className="px-4 pb-4 border-t border-[#ECE6F2] pt-3 space-y-3">
           {fc.parcelas.map((p) => {
             const venc = new Date(p.parcela.vencimento)
-            const dataStr = `${String(p.parcela.numero ?? 0)}/${p.parcela.numero === 1 ? '' : ' '}${venc.toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' })}`
             return (
               <div key={p.parcela.id} className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -338,14 +340,15 @@ const FluxoCard: React.FC<{
                     {venc.toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' })}
                   </p>
                   <p className="text-xs text-gray-500">
-                    Base {rotuloMes(p.parcela.mes_base || '')}: {formatBRLPublic(p.valorBase)}
-                    {p.fatores.length > 0 &&
-                      ` · Acumulado ${rotuloMes(p.fatores[0].mes)} a ${rotuloMes(p.fatores[p.fatores.length - 1].mes)}: ${((p.fator - 1) * 100).toFixed(2)}%`}
+                    Base {formatBRLPublic(p.valorBase)}
+                    {p.mesesCarrego > 0 &&
+                      p.taxaReferencia &&
+                      ` · INCC ${rotuloMes(p.taxaReferencia.mes)}: ${p.taxaUsada.toFixed(2)}% × ${p.mesesCarrego} ${p.mesesCarrego === 1 ? 'mês' : 'meses'} = ${((p.fator - 1) * 100).toFixed(2)}% (${formatBRLPublic(p.correcao)})`}
                   </p>
                   {p.estimado && (
                     <p className="text-[11px] text-amber-600 bg-amber-50 inline-block px-2 py-0.5 rounded-full mt-1">
-                      Estimado: {p.fatores.filter((f) => f.estimado).length} meses ·{' '}
-                      {(p.mediaUsada ?? 0).toFixed(2)}%/mês
+                      Estimado · INCC de {rotuloMes(p.mesReferencia)} ainda não divulgado · média{' '}
+                      {p.taxaUsada.toFixed(2)}%/mês (valor aproximado)
                     </p>
                   )}
                 </div>

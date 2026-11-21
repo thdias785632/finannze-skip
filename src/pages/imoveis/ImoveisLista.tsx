@@ -201,6 +201,9 @@ export const ImoveisLista: React.FC = () => {
                         year: 'numeric',
                       })}{' '}
                       · {formatBRLPublic(calc.proxima.valorCorrigido)}
+                      {calc.proxima.estimado && (
+                        <span className="text-amber-600 font-semibold">(estimado)</span>
+                      )}
                     </div>
                   )}
                 </button>

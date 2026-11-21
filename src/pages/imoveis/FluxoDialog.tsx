@@ -142,9 +142,9 @@ export const FluxoDialog: React.FC<Props> = ({
           </div>
 
           <p className="text-[11px] text-gray-400">
-            Cada parcela é corrigida pelo INCC com {defasagemIncc} mês(es) de defasagem antes do
-            vencimento. Índices ainda não divulgados são estimados pela média do INCC do ano
-            corrente.
+            Cada parcela usa o INCC do mês 2 meses antes do vencimento (trava de previsibilidade),
+            aplicado × {defasagemIncc} mês(es) de carrego desde a assinatura do contrato. Índices
+            ainda não divulgados são estimados pela média do INCC do ano corrente.
           </p>
 
           {erro && <p className="text-xs text-red-500">{erro}</p>}
