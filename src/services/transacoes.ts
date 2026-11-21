@@ -38,7 +38,98 @@ export const rotuloFatura = (mesStr: string): string => {
   return `${nome}/${ano}`
 }
 
+const mapTransacao = (r: Record<string, any>): Transacao => ({
+  id: r.id,
+  user_id: r.user_id,
+  descricao: r.descricao,
+  valor: Number(r.valor),
+  tipo: r.tipo as TipoTransacao,
+  data: r.data,
+  cartao_id: r.cartao_id || undefined,
+  categoria_id: r.categoria_id,
+  recorrente: Boolean(r.recorrente),
+  recorrencia_periodo: r.recorrencia_periodo,
+  pago: Boolean(r.pago),
+  expand: {
+    cartao_id: r.expand?.cartao_id
+      ? {
+          id: r.expand.cartao_id.id,
+          user_id: r.expand.cartao_id.user_id,
+          nome: r.expand.cartao_id.nome,
+          dia_vencimento: Number(r.expand.cartao_id.dia_vencimento),
+          cor: r.expand.cartao_id.cor,
+          created: r.expand.cartao_id.created,
+          updated: r.expand.cartao_id.updated,
+        }
+      : undefined,
+    categoria_id: r.expand?.categoria_id
+      ? {
+          id: r.expand.categoria_id.id,
+          nome: r.expand.categoria_id.nome,
+          cor: r.expand.categoria_id.cor,
+          tipo: r.expand.categoria_id.tipo,
+          icone: r.expand.categoria_id.icone,
+          created: r.expand.categoria_id.created,
+          updated: r.expand.categoria_id.updated,
+        }
+      : undefined,
+  },
+  created: r.created,
+  updated: r.updated,
+})
+
 export const transacoesService = {
+  /** Busca uma transação por id (com cartão e categoria expandidos). */
+  async get(id: string): Promise<Transacao> {
+    const r = await pb.collection('transacoes').getOne(id, {
+      expand: 'cartao_id,categoria_id',
+    })
+    return mapTransacao(r)
+  },
+
+  /**
+   * Atualiza uma transação EXISTENTE (não cria nova). Usado pela edição de
+   * despesa de cartão: ao alterar data/cartão/valor, a regra da fatura
+   * (mesDaFatura) recalcula para qual fatura o lançamento cai.
+   */
+  async update(
+    id: string,
+    data: {
+      descricao?: string
+      valor?: number
+      tipo?: TipoTransacao
+      data?: string
+      cartao_id?: string | null
+      categoria_id?: string | null
+      recorrente?: boolean
+      recorrencia_periodo?: 'mensal' | 'anual'
+      pago?: boolean
+    },
+  ): Promise<Transacao> {
+    const r = await pb.collection('transacoes').update(
+      id,
+      {
+        ...(data.descricao !== undefined && { descricao: data.descricao }),
+        ...(data.valor !== undefined && { valor: data.valor }),
+        ...(data.tipo !== undefined && { tipo: data.tipo }),
+        ...(data.data !== undefined && {
+          data: data.data.includes('T') ? data.data : `${data.data} 12:00:00.000Z`,
+        }),
+        ...(data.cartao_id !== undefined && { cartao_id: data.cartao_id || null }),
+        ...(data.categoria_id !== undefined && { categoria_id: data.categoria_id || null }),
+        ...(data.recorrente !== undefined && { recorrente: Boolean(data.recorrente) }),
+        ...(data.recorrencia_periodo !== undefined && {
+          recorrencia_periodo: data.recorrencia_periodo,
+        }),
+        ...(data.pago !== undefined && { pago: data.pago }),
+      },
+      {
+        expand: 'cartao_id,categoria_id',
+      },
+    )
+    return mapTransacao(r)
+  },
+
   /**
    * Lista transações. Com `mes` (YYYY-MM), aplica a regra da fatura: cada
    * despesa com cartão é atribuída ao mês de vencimento da respectiva fatura,

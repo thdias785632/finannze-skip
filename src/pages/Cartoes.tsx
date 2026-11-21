@@ -4,7 +4,8 @@ import { BottomNav } from '@/components/BottomNav'
 import { transacoesService, mesDaFatura, rotuloFatura } from '@/services/transacoes'
 import { cartoesService } from '@/services/cartoes'
 import type { Cartao, Transacao } from '@/types/financial'
-import { CreditCard, Plus, X, Trash2 } from 'lucide-react'
+import { CreditCard, Plus, X, Trash2, Pencil } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { toast } from '@/hooks/use-toast'
 import { formatBRLPublic } from '@/lib/format'
 
@@ -14,6 +15,7 @@ import { formatBRLPublic } from '@/lib/format'
  * adicionar novos cartões (nome + dia de vencimento).
  */
 export const CartoesPage: React.FC = () => {
+  const navigate = useNavigate()
   const [cartoes, setCartoes] = useState<Cartao[]>([])
   const [transacoes, setTransacoes] = useState<Transacao[]>([])
   const [loading, setLoading] = useState(true)
@@ -71,6 +73,10 @@ export const CartoesPage: React.FC = () => {
     } finally {
       setSaving(false)
     }
+  }
+
+  const abrirEdicao = (id: string) => {
+    navigate(`/editar-transacao/${id}`, { state: { from: '/cartoes' } })
   }
 
   const excluirCartao = async (id: string) => {
@@ -211,6 +217,7 @@ export const CartoesPage: React.FC = () => {
                   titulo={`${cartao.nome} · Fatura ${rotuloFatura(mesAtual)}`}
                   itens={faturaAtual}
                   total={soma(faturaAtual)}
+                  onEditar={abrirEdicao}
                 />
 
                 {/* Fatura do próximo mês */}
@@ -218,6 +225,7 @@ export const CartoesPage: React.FC = () => {
                   titulo={`${cartao.nome} · Fatura ${rotuloFatura(mesProximo)}`}
                   itens={faturaProxima}
                   total={soma(faturaProxima)}
+                  onEditar={abrirEdicao}
                 />
               </div>
             )
@@ -230,11 +238,12 @@ export const CartoesPage: React.FC = () => {
   )
 }
 
-const FaturaCard: React.FC<{ titulo: string; itens: Transacao[]; total: number }> = ({
-  titulo,
-  itens,
-  total,
-}) => (
+const FaturaCard: React.FC<{
+  titulo: string
+  itens: Transacao[]
+  total: number
+  onEditar: (id: string) => void
+}> = ({ titulo, itens, total, onEditar }) => (
   <section className="bg-white rounded-3xl p-5 shadow-[0_4px_24px_rgba(102,57,166,0.06)] border border-[#EBE4F5]">
     <div className="flex items-center justify-between mb-2">
       <h3 className="text-sm font-black text-[#6639A6]">{titulo}</h3>
@@ -244,13 +253,24 @@ const FaturaCard: React.FC<{ titulo: string; itens: Transacao[]; total: number }
     ) : (
       <div className="divide-y divide-gray-100">
         {itens.map((t) => (
-          <div key={t.id} className="flex items-center justify-between py-2.5">
+          <div key={t.id} className="flex items-center justify-between py-2.5 gap-2">
             <span className="text-xs font-semibold text-[#1F1438] truncate min-w-0">
               {t.descricao}
             </span>
-            <span className="text-xs font-black text-rose-600 tabular-nums shrink-0">
-              − {formatBRLPublic(t.valor)}
-            </span>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                className="p-1 rounded-full text-gray-400 hover:text-[#6639A6] hover:bg-[#F1EAF9] transition"
+                aria-label={`Editar ${t.descricao}`}
+                title="Editar despesa"
+                onClick={() => onEditar(t.id)}
+              >
+                <Pencil className="w-3.5 h-3.5" />
+              </button>
+              <span className="text-xs font-black text-rose-600 tabular-nums">
+                − {formatBRLPublic(t.valor)}
+              </span>
+            </div>
           </div>
         ))}
       </div>
