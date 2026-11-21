@@ -14,8 +14,11 @@ import {
   ArrowDownCircle,
   ArrowUpCircle,
   Plus,
+  Crown,
 } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { useAuth } from '@/context/AuthContext'
 
 type Modo = 'saida' | 'entrada'
 type AbaSaida = 'cartao' | 'outras'
@@ -55,6 +58,7 @@ export const NewTransactionPage: React.FC = () => {
   const [parcelas, setParcelas] = useState('1')
   const [recorrente, setRecorrente] = useState<'sim' | 'nao'>('nao')
   const [saving, setSaving] = useState(false)
+  const { canAccessRecurring } = useAuth()
 
   // Cadastro de nova categoria inline
   const [novaCatOpen, setNovaCatOpen] = useState(false)
@@ -144,6 +148,9 @@ export const NewTransactionPage: React.FC = () => {
     try {
       const isCartao = modo === 'saida' && aba === 'cartao'
       const parcelasNum = isCartao ? numParcelas : 1
+      // Gate de plano: usuário free nunca grava recorrente=true,
+      // mesmo que o valor chega do estado por algum caminho.
+      const recorrenteFinal = canAccessRecurring && recorrente === 'sim'
 
       await transacoesService.createComParcelas({
         descricao: nome.trim(),
@@ -153,7 +160,7 @@ export const NewTransactionPage: React.FC = () => {
         categoriaId,
         cartaoId: isCartao ? cartaoId : undefined,
         parcelas: parcelasNum,
-        recorrente: recorrente === 'sim',
+        recorrente: recorrenteFinal,
       })
 
       toast({
@@ -362,30 +369,52 @@ export const NewTransactionPage: React.FC = () => {
               </div>
             )}
 
-            {/* Recorrente */}
+            {/* Recorrente — exclusivo dos planos pagos (VIP/Premium) */}
             <div>
               <label className={labelCls}>Recorrente:</label>
-              <div className="flex items-center gap-6 pl-1">
-                <label className="flex items-center gap-2 text-xs font-semibold text-gray-700 cursor-pointer">
+              <div
+                className={`flex items-center gap-6 pl-1 ${!canAccessRecurring ? 'opacity-50' : ''}`}
+              >
+                <label
+                  className={`flex items-center gap-2 text-xs font-semibold text-gray-700 ${
+                    canAccessRecurring ? 'cursor-pointer' : 'cursor-not-allowed'
+                  }`}
+                  title={!canAccessRecurring ? 'Recurso exclusivo do plano VIP' : undefined}
+                >
                   <input
                     type="radio"
                     name="recorrente"
                     checked={recorrente === 'sim'}
-                    onChange={() => setRecorrente('sim')}
+                    onChange={() => canAccessRecurring && setRecorrente('sim')}
+                    disabled={!canAccessRecurring}
                     className="accent-[#6639A6] w-4 h-4"
                   />
                   Sim
                 </label>
-                <label className="flex items-center gap-2 text-xs font-semibold text-gray-700 cursor-pointer">
+                <label
+                  className={`flex items-center gap-2 text-xs font-semibold text-gray-700 ${
+                    canAccessRecurring ? 'cursor-pointer' : 'cursor-not-allowed'
+                  }`}
+                >
                   <input
                     type="radio"
                     name="recorrente"
                     checked={recorrente === 'nao'}
                     onChange={() => setRecorrente('nao')}
+                    disabled={!canAccessRecurring}
                     className="accent-[#6639A6] w-4 h-4"
                   />
                   Não
                 </label>
+                {!canAccessRecurring && (
+                  <Link
+                    to="/planos"
+                    className="ml-auto flex items-center gap-1 text-[10px] font-bold text-amber-500"
+                  >
+                    <Crown className="w-3.5 h-3.5" />
+                    Recurso VIP
+                  </Link>
+                )}
               </div>
             </div>
 
