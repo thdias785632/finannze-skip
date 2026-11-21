@@ -176,7 +176,7 @@ export const ExtractPage: React.FC = () => {
                 receitas.map((t) => (
                   <div key={t.id} className="finz-extract-row finz-row-revenue">
                     <h2 className="finz-row-name">{t.descricao}</h2>
-                    <p className="finz-row-amount">+ R$ {formatBRLPublic(t.valor)}</p>
+                    <p className="finz-row-amount">+ {formatBRLPublic(t.valor)}</p>
                     <div className="finz-row-actions">
                       <button
                         type="button"
@@ -194,7 +194,7 @@ export const ExtractPage: React.FC = () => {
 
               <div className="finz-balance">
                 <h2>Total</h2>
-                <p>R$ {formatBRLPublic(totalReceitas)}</p>
+                <p>{formatBRLPublic(totalReceitas)}</p>
               </div>
             </div>
 
@@ -219,7 +219,7 @@ export const ExtractPage: React.FC = () => {
                   {despesasSemCartao.map((t) => (
                     <div key={t.id} className="finz-extract-row finz-row-expense">
                       <h2 className="finz-row-name">{t.descricao}</h2>
-                      <p className="finz-row-amount">− R$ {formatBRLPublic(t.valor)}</p>
+                      <p className="finz-row-amount">− {formatBRLPublic(t.valor)}</p>
                       <div className="finz-row-actions">
                         <button
                           type="button"
@@ -255,7 +255,7 @@ export const ExtractPage: React.FC = () => {
                           </span>
                         )}
                       </h2>
-                      <p className="finz-row-amount">− R$ {formatBRLPublic(totalCartoes)}</p>
+                      <p className="finz-row-amount">− {formatBRLPublic(totalCartoes)}</p>
                       <div className="finz-row-actions">
                         <button
                           type="button"
@@ -274,7 +274,7 @@ export const ExtractPage: React.FC = () => {
 
               <div className="finz-balance">
                 <h2>Total</h2>
-                <p>R$ {formatBRLPublic(totalDespesas)}</p>
+                <p>{formatBRLPublic(totalDespesas)}</p>
               </div>
             </div>
           </div>
