@@ -68,7 +68,7 @@ const DonutChart: React.FC<DonutChartProps> = ({
     }[] = []
     let cursor = 0
     slices.forEach((slice, index) => {
-      const fraction = total > 0 ? slice.value / total : 0
+      const fraction = centerValue > 0 ? slice.value / centerValue : 0
       const sweep = fraction * 360
       list.push({
         start: cursor,
@@ -81,7 +81,7 @@ const DonutChart: React.FC<DonutChartProps> = ({
       cursor += sweep
     })
     return list
-  }, [slices, total])
+  }, [slices, centerValue])
 
   const polar = (cx: number, cy: number, r: number, angleDeg: number) => {
     const rad = ((angleDeg - 90) * Math.PI) / 180
@@ -168,7 +168,7 @@ const DonutChart: React.FC<DonutChartProps> = ({
                 {formatBRL(arcs[active].slice.value)}
               </span>
               <span className="text-[10px] text-[#6639A6] font-medium mt-0.5">
-                {(arcs[active].fraction * 100).toFixed(1).replace('.', ',')}% dos gastos
+                {(arcs[active].fraction * 100).toFixed(1).replace('.', ',')}% da sua renda
               </span>
             </>
           )}
