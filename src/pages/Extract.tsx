@@ -164,7 +164,7 @@ export const ExtractPage: React.FC = () => {
                   type="button"
                   className="finz-icon-btn-add"
                   aria-label="Adicionar entrada"
-                  onClick={() => navigate('/nova-transacao')}
+                  onClick={() => navigate('/nova-transacao', { state: { from: '/extrato' } })}
                 >
                   <Plus className="w-4 h-4" />
                 </button>
@@ -206,7 +206,7 @@ export const ExtractPage: React.FC = () => {
                   type="button"
                   className="finz-icon-btn-add"
                   aria-label="Adicionar saída"
-                  onClick={() => navigate('/nova-transacao')}
+                  onClick={() => navigate('/nova-transacao', { state: { from: '/extrato' } })}
                 >
                   <Plus className="w-4 h-4" />
                 </button>
@@ -235,7 +235,9 @@ export const ExtractPage: React.FC = () => {
                           className="finz-icon-btn finz-primary-hover"
                           aria-label={`Editar ${t.descricao}`}
                           title="Editar lançamento"
-                          onClick={() => navigate('/nova-transacao')}
+                          onClick={() =>
+                            navigate('/nova-transacao', { state: { from: '/extrato' } })
+                          }
                         >
                           <Pencil className="w-3.5 h-3.5" />
                         </button>

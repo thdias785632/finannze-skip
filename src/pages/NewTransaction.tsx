@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { AppHeader } from '@/components/AppHeader'
 import { BottomNav } from '@/components/BottomNav'
 import { cartoesService } from '@/services/cartoes'
@@ -28,6 +28,15 @@ type AbaSaida = 'cartao' | 'outras'
  */
 export const NewTransactionPage: React.FC = () => {
   const navigate = useNavigate()
+  const location = useLocation()
+
+  // Tela de onde o formulário foi aberto (Extrato, Início, Cartões…):
+  // após salvar, volta para ela em vez de ir sempre para o Início.
+  const paginaOrigem: string =
+    (location.state as { from?: string } | null)?.from &&
+    typeof (location.state as { from?: string }).from === 'string'
+      ? ((location.state as { from?: string }).from as string)
+      : '/'
 
   const [modo, setModo] = useState<Modo>('saida')
   const [aba, setAba] = useState<AbaSaida>('cartao')
@@ -156,7 +165,7 @@ export const NewTransactionPage: React.FC = () => {
             : 'O lançamento foi registrado com sucesso.',
       })
       reset()
-      navigate('/')
+      navigate(paginaOrigem)
     } catch (err) {
       console.error(err)
       toast({

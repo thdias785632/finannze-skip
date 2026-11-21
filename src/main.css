@@ -370,3 +370,17 @@
   @apply py-8 text-center text-xs;
   color: #9ca3af;
 }
+
+/* ==========================================================================
+ iOS Safari: zoom automático em inputs
+ O Safari (iPhone) dá zoom na página ao focar qualquer input/select/textarea
+ com font-size computado menor que 16px — e o zoom não volta ao sair do
+ campo. Forçamos 16px em telas touch/mobile para o zoom nunca disparar.
+ ========================================================================== */
+@media (max-width: 820px) {
+  input:not([type='checkbox']):not([type='radio']),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
