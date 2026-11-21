@@ -1,20 +1,25 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { AppHeader } from '@/components/AppHeader'
 import { BottomNav } from '@/components/BottomNav'
 import { DonutChart, type DonutSlice } from '@/components/DonutChart'
 import { transacoesService } from '@/services/transacoes'
 import type { Transacao } from '@/types/financial'
+import { useAuth } from '@/context/AuthContext'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { toast } from '@/hooks/use-toast'
 import { formatBRLPublic } from '@/lib/format'
 import { CategoryDetail } from '@/components/CategoryDetail'
 
 /**
- * Tela de Resumo (Home) — gráfico "Gastos por Categoria" com centro "Total",
- * fatias/legenda clicáveis (abrem os gastos da categoria) e a categoria
- * padrão "Economia" (diferença entradas − saídas do mês).
+ * Tela de Início — portada do dashboard-chart do projeto original
+ * (prj-finanzze-front, Angular). Mesma estrutura do template, mesmos textos,
+ * mesmo tema roxo e a lógica do TS original (agrupamento por categoria,
+ * navegação de meses e a fatia "Economia" calculada), com os dados vindo
+ * das coleções PocketBase deste projeto (regra de fatura por vencimento
+ * aplicada no transacoesService).
  */
 export const DashboardPage: React.FC = () => {
+  const { user } = useAuth()
   const [monthOffset, setMonthOffset] = useState<number>(0)
   const [transacoes, setTransacoes] = useState<Transacao[]>([])
   const [loading, setLoading] = useState(true)
@@ -27,7 +32,7 @@ export const DashboardPage: React.FC = () => {
   const monthStr = `${targetYear}-${String(targetMonthNum).padStart(2, '0')}`
   const monthLabel = targetDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
 
-  const loadMonth = async () => {
+  const loadMonth = useCallback(async () => {
     try {
       setLoading(true)
       const list = await transacoesService.list({ mes: monthStr })
@@ -42,19 +47,20 @@ export const DashboardPage: React.FC = () => {
     } finally {
       setLoading(false)
     }
-  }
+  }, [monthStr])
 
   useEffect(() => {
-    loadMonth()
-  }, [monthOffset])
+    void loadMonth()
+  }, [loadMonth])
 
-  const receitas = transacoes.filter((t) => t.tipo === 'receita')
-  const despesas = transacoes.filter((t) => t.tipo === 'despesa')
+  const receitas = useMemo(() => transacoes.filter((t) => t.tipo === 'receita'), [transacoes])
+  const despesas = useMemo(() => transacoes.filter((t) => t.tipo === 'despesa'), [transacoes])
   const totalReceitas = receitas.reduce((acc, t) => acc + t.valor, 0)
   const totalDespesas = despesas.reduce((acc, t) => acc + t.valor, 0)
+  const saldo = totalReceitas - totalDespesas
 
-  // Agrupa despesas por categoria e acrescenta a "Economia" (padrão,
-  // não lançada manualmente) como a diferença entradas − saídas.
+  // Agrupa despesas por categoria (lógica do dashboard-chart original) e
+  // acrescenta a "Economia" — categoria calculada, não lançável: entradas − saídas.
   const donutData: DonutSlice[] = useMemo(() => {
     const catMap = new Map<string, { nome: string; cor: string; valor: number }>()
     despesas.forEach((t) => {
@@ -74,13 +80,12 @@ export const DashboardPage: React.FC = () => {
       .sort((a, b) => b[1].valor - a[1].valor)
       .map(([id, c]) => ({ id, label: c.nome, value: c.valor, color: c.cor }))
 
-    const economia = totalReceitas - totalDespesas
-    if (economia > 0) {
-      slices.push({ id: '__economia__', label: 'Economia', value: economia, color: '#4C1D95' })
+    if (saldo > 0) {
+      slices.push({ id: '__economia__', label: 'Economia', value: saldo, color: '#4C1D95' })
       slices.sort((a, b) => b.value - a.value)
     }
     return slices
-  }, [despesas, totalReceitas, totalDespesas])
+  }, [despesas, saldo])
 
   const catSelecionada = donutData.find((c) => c.id === catDetalhe) || null
   const gastosCatSelecionada = useMemo(() => {
@@ -90,54 +95,60 @@ export const DashboardPage: React.FC = () => {
   }, [catSelecionada, despesas])
 
   return (
-    <div className="min-h-screen bg-[#F6F3FB] text-[#1F1438] pb-24">
+    <div className="min-h-screen bg-[#F6F3FB] text-[#1F1438] pb-24 finz-dashboard">
       <AppHeader />
 
       <main className="max-w-md mx-auto px-4 pt-4 space-y-4">
-        {/* Navegação de meses no topo — layout da v0.0.3 */}
-        <section className="bg-white rounded-3xl px-4 py-3 shadow-[0_4px_24px_rgba(102,57,166,0.06)] border border-[#EBE4F5] flex items-center justify-between">
+        {/* Navegação de meses — igual ao original */}
+        <section className="finz-card finz-month-nav">
           <button
             type="button"
             onClick={() => setMonthOffset((m) => m - 1)}
-            className="p-2 rounded-xl hover:bg-purple-50 text-[#6639A6] transition"
+            className="finz-month-arrow"
             aria-label="Mês anterior"
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
-          <span className="text-sm font-bold capitalize text-[#1F1438]">{monthLabel}</span>
+          <span className="finz-month-label">{monthLabel}</span>
           <button
             type="button"
             onClick={() => setMonthOffset((m) => m + 1)}
-            className="p-2 rounded-xl hover:bg-purple-50 text-[#6639A6] transition"
+            className="finz-month-arrow"
             aria-label="Próximo mês"
           >
             <ChevronRight className="w-5 h-5" />
           </button>
         </section>
 
-        {/* Saldo do mês — card da v0.0.3 (antes "Saldo Total em contas",
-            adaptado para o modelo atual, sem contas) */}
-        <section className="bg-white rounded-3xl p-5 shadow-[0_4px_24px_rgba(102,57,166,0.06)] border border-[#EBE4F5]">
-          <span className="text-xs font-semibold text-gray-500">Saldo do mês</span>
-          <p
-            className={`mt-1 text-2xl font-black ${
-              totalReceitas - totalDespesas >= 0 ? 'text-emerald-600' : 'text-rose-600'
-            }`}
-          >
-            {formatBRLPublic(totalReceitas - totalDespesas)}
-          </p>
+        {/* Resumo do mês — Entradas / Saídas / Saldo, como no original */}
+        <section className="finz-card finz-summary">
+          <div className="finz-summary-row">
+            <span className="finz-summary-label">Entradas do mês</span>
+            <span className="finz-summary-value finz-in">+ {formatBRLPublic(totalReceitas)}</span>
+          </div>
+          <div className="finz-summary-row">
+            <span className="finz-summary-label">Saídas do mês</span>
+            <span className="finz-summary-value finz-out">− {formatBRLPublic(totalDespesas)}</span>
+          </div>
+          <div className="finz-summary-row finz-summary-total">
+            <span className="finz-summary-label">
+              {user?.name ? `Saldo de ${user.name.split(' ')[0]}` : 'Saldo do mês'}
+            </span>
+            <span className={`finz-summary-value ${saldo >= 0 ? 'finz-balance' : 'finz-out'}`}>
+              {formatBRLPublic(saldo)}
+            </span>
+          </div>
         </section>
 
-        <section className="bg-white rounded-3xl p-5 shadow-[0_4px_24px_rgba(102,57,166,0.06)] border border-[#EBE4F5]">
-          <h2 className="text-base font-black text-[#1F1438] mb-2">Gastos por Categoria</h2>
+        {/* Gráfico — Gastos por Categoria (dashboard-chart) */}
+        <section className="finz-card">
+          <h2 className="finz-chart-title">Gastos por Categoria</h2>
           {loading ? (
-            <div className="py-12 text-center text-xs text-gray-400">
-              <span className="inline-block w-5 h-5 border-2 border-[#6639A6] border-t-transparent rounded-full animate-spin" />
+            <div className="finz-loading">
+              <span className="finz-spinner" />
             </div>
           ) : donutData.length === 0 ? (
-            <div className="py-8 text-center text-xs text-gray-400">
-              Nenhuma movimentação registrada neste mês.
-            </div>
+            <div className="finz-empty">Nenhuma movimentação registrada neste mês.</div>
           ) : (
             <DonutChart
               centerLabel="Total"
@@ -149,32 +160,7 @@ export const DashboardPage: React.FC = () => {
           )}
         </section>
 
-        {/* Resumo do mês (entradas/saídas) */}
-        <section className="bg-white rounded-3xl p-5 shadow-[0_4px_24px_rgba(102,57,166,0.06)] border border-[#EBE4F5] space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-gray-500">Entradas do mês</span>
-            <span className="text-sm font-black text-emerald-600">
-              + {formatBRLPublic(totalReceitas)}
-            </span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-gray-500">Saídas do mês</span>
-            <span className="text-sm font-black text-rose-600">
-              − {formatBRLPublic(totalDespesas)}
-            </span>
-          </div>
-          <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
-            <span className="text-xs font-semibold text-gray-500">Economia</span>
-            <span
-              className={`text-sm font-black ${totalReceitas - totalDespesas >= 0 ? 'text-[#1D4ED8]' : 'text-rose-600'}`}
-            >
-              {totalReceitas - totalDespesas >= 0 ? '+' : '−'}{' '}
-              {formatBRLPublic(Math.abs(totalReceitas - totalDespesas))}
-            </span>
-          </div>
-        </section>
-
-        {/* Detalhe da categoria selecionada no gráfico */}
+        {/* Detalhe da categoria selecionada no gráfico — igual ao original */}
         {catSelecionada && (
           <CategoryDetail
             nome={catSelecionada.label}

@@ -288,3 +288,85 @@
     animation: spotlight 2s ease forwards;
   }
 }
+
+/* ==========================================================================
+   Tela de Início (Dashboard) — portada do dashboard-chart do projeto
+   original (prj-finanzze-front, Angular). Mesma estrutura, textos, cores e
+   espaçamentos do SCSS original, com o tema roxo e o fundo #F6F3FB.
+   ========================================================================== */
+.finz-dashboard {
+  font-family: 'Roboto', system-ui, sans-serif;
+}
+
+.finz-dashboard .finz-card {
+  @apply bg-white rounded-3xl p-5;
+  box-shadow: 0 4px 24px rgba(102, 57, 166, 0.06);
+  border: 1px solid #ebe4f5;
+}
+
+.finz-dashboard .finz-month-nav {
+  @apply px-4 py-3 flex items-center justify-between;
+}
+
+.finz-dashboard .finz-month-arrow {
+  @apply p-2 rounded-xl transition;
+  color: #6639a6;
+}
+.finz-dashboard .finz-month-arrow:hover {
+  background: rgba(102, 57, 166, 0.08);
+}
+
+.finz-dashboard .finz-month-label {
+  @apply text-sm font-bold capitalize;
+  color: #1f1438;
+}
+
+.finz-dashboard .finz-summary {
+  @apply space-y-3;
+}
+
+.finz-dashboard .finz-summary-row {
+  @apply flex items-center justify-between;
+}
+
+.finz-dashboard .finz-summary-row.finz-summary-total {
+  @apply pt-2;
+  border-top: 1px solid #f3f4f6;
+}
+
+.finz-dashboard .finz-summary-label {
+  @apply text-xs font-semibold;
+  color: #6b7280;
+}
+
+.finz-dashboard .finz-summary-value {
+  @apply text-sm font-black tabular-nums;
+}
+.finz-dashboard .finz-summary-value.finz-in {
+  color: #059669;
+}
+.finz-dashboard .finz-summary-value.finz-out {
+  color: #e11d48;
+}
+.finz-dashboard .finz-summary-value.finz-balance {
+  color: #1d4ed8;
+}
+
+.finz-dashboard .finz-chart-title {
+  @apply text-base font-black mb-2;
+  color: #1f1438;
+}
+
+.finz-dashboard .finz-loading {
+  @apply py-12 text-center;
+}
+.finz-dashboard .finz-spinner {
+  @apply inline-block w-5 h-5 rounded-full animate-spin;
+  border: 2px solid #6639a6;
+  border-top-color: transparent;
+}
+
+.finz-dashboard .finz-empty {
+  @apply py-8 text-center text-xs;
+  color: #9ca3af;
+}
