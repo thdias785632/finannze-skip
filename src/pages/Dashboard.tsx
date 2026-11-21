@@ -87,9 +87,9 @@ export const DashboardPage: React.FC = () => {
   const receitas = useMemo(() => transacoes.filter((t) => t.tipo === 'receita'), [transacoes])
   const despesas = useMemo(() => transacoes.filter((t) => t.tipo === 'despesa'), [transacoes])
   const totalReceitas = receitas.reduce((acc, t) => acc + t.valor, 0)
-  const totalDespesas = despesas.reduce((acc, t) => acc + t.valor, 0)
+  let totalDespesas = despesas.reduce((acc, t) => acc + t.valor, 0)
   const saldo = totalReceitas - totalDespesas
-
+  totalDespesas = totalDespesas + totalReceitas
   // Agrupa despesas por categoria (lógica do dashboard-chart original) e
   // acrescenta a "Economia" — categoria calculada, não lançável: entradas − saídas.
   const donutData: DonutSlice[] = useMemo(() => {
