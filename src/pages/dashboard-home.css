@@ -1,0 +1,308 @@
+/* ==========================================================================
+   Tela de Início — Resumo do mês (hero) e cards dos cartões.
+   Porta do views/dashboard/dashboard.component.html + .scss do projeto
+   original (prj-finanzze-front, Angular), no tema roxo do app.
+   Escopado sob .finz-dashboard para não regredir Extrato/Cartões/Imóveis.
+   ========================================================================== */
+
+/* ---------- Hero: Olá, saldo do mês, entradas e saídas ---------- */
+.finz-dashboard .finz-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: 24px;
+  padding: 20px;
+  color: #fff;
+  background: linear-gradient(135deg, #7e4fc0 0%, #6639a6 55%, #5b2e96 100%);
+  box-shadow: 0 10px 30px rgba(102, 57, 166, 0.25);
+}
+
+/* blobs translúcidos do print */
+.finz-dashboard .finz-hero::before,
+.finz-dashboard .finz-hero::after,
+.finz-dashboard .finz-cc-visual::before {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.09);
+  pointer-events: none;
+}
+.finz-dashboard .finz-hero::before {
+  width: 230px;
+  height: 230px;
+  top: -100px;
+  right: -70px;
+}
+.finz-dashboard .finz-hero::after {
+  width: 170px;
+  height: 170px;
+  bottom: -80px;
+  left: -50px;
+}
+.finz-dashboard .finz-hero > *,
+.finz-dashboard .finz-cc-visual > * {
+  position: relative;
+  z-index: 1;
+}
+
+.finz-dashboard .finz-hero-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.finz-dashboard .finz-hero-greeting {
+  font-size: 14px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.finz-dashboard .finz-hero-month {
+  font-size: 12px;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  padding: 4px 12px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.finz-dashboard .finz-hero-caption {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.finz-dashboard .finz-hero-balance {
+  margin: 2px 0 16px;
+  font-size: 30px;
+  line-height: 1.1;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+.finz-dashboard .finz-hero-balance.is-negative {
+  color: #fda4af;
+}
+
+.finz-dashboard .finz-hero-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.finz-dashboard .finz-stat {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  padding: 10px 12px;
+}
+
+.finz-dashboard .finz-stat-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.finz-dashboard .finz-stat-icon.in {
+  background: rgba(52, 211, 153, 0.28);
+  color: #6ee7b7;
+}
+.finz-dashboard .finz-stat-icon.out {
+  background: rgba(251, 113, 133, 0.24);
+  color: #fda4af;
+}
+
+.finz-dashboard .finz-stat-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+  min-width: 0;
+}
+
+.finz-dashboard .finz-stat-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.finz-dashboard .finz-stat-value {
+  font-size: 14px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.finz-dashboard .finz-stat-value.in {
+  color: #6ee7b7;
+}
+.finz-dashboard .finz-stat-value.out {
+  color: #fda4af;
+}
+
+/* ---------- Seção Cartões ---------- */
+.finz-dashboard .finz-cards-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+.finz-dashboard .finz-cards-head h2 {
+  font-size: 16px;
+  font-weight: 900;
+  color: #1f1438;
+}
+.finz-dashboard .finz-cards-more {
+  display: inline-flex;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: #6639a6;
+  text-decoration: none;
+}
+.finz-dashboard .finz-cards-more:hover {
+  text-decoration: underline;
+}
+
+.finz-dashboard .finz-cards-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.finz-dashboard .finz-cc {
+  display: flex;
+  flex-direction: column;
+  border-radius: 24px;
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid #ebe4f5;
+  box-shadow: 0 4px 24px rgba(102, 57, 166, 0.06);
+  text-decoration: none;
+  color: inherit;
+}
+
+.finz-dashboard .finz-cc-visual {
+  position: relative;
+  overflow: hidden;
+  padding: 18px;
+  color: #fff;
+  background: linear-gradient(135deg, #7e4fc0 0%, #6639a6 55%, #5b2e96 100%);
+}
+.finz-dashboard .finz-cc-visual::before {
+  width: 180px;
+  height: 180px;
+  top: -80px;
+  right: -60px;
+}
+
+.finz-dashboard .finz-cc-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.finz-dashboard .finz-cc-chip {
+  width: 40px;
+  height: 30px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.15));
+  border: 1px solid rgba(255, 255, 255, 0.35);
+}
+
+.finz-dashboard .finz-cc-flag {
+  font-size: 11px;
+  font-weight: 900;
+  font-style: italic;
+  letter-spacing: 0.08em;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  padding: 4px 10px;
+  border-radius: 8px;
+}
+
+.finz-dashboard .finz-cc-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.finz-dashboard .finz-cc-value {
+  display: block;
+  margin: 2px 0 10px;
+  font-size: 26px;
+  line-height: 1.1;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.finz-dashboard .finz-cc-name {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.finz-dashboard .finz-cc-recent {
+  padding: 14px 18px 16px;
+}
+
+.finz-dashboard .finz-recent-title {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #9ca3af;
+}
+
+.finz-dashboard .finz-cc-recent ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.finz-dashboard .finz-cc-recent li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 36px;
+  border-bottom: 1px solid #f1edf7;
+  font-size: 13px;
+}
+.finz-dashboard .finz-cc-recent li:last-child {
+  border-bottom: none;
+}
+
+.finz-dashboard .finz-recent-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #1f1438;
+}
+
+.finz-dashboard .finz-recent-value {
+  flex-shrink: 0;
+  color: #1f1438;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.finz-dashboard .finz-recent-empty {
+  margin: 0;
+  padding: 8px 0;
+  color: #9ca3af;
+  font-size: 13px;
+}
