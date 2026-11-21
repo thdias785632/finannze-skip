@@ -4,16 +4,42 @@ import { AppHeader } from '@/components/AppHeader'
 import { BottomNav } from '@/components/BottomNav'
 import { cartoesService } from '@/services/cartoes'
 import { categoriasService } from '@/services/categorias'
-import { transacoesService, mesDaFatura } from '@/services/transacoes'
+import { transacoesService, mesDaFatura, descricaoBase, rotuloFatura } from '@/services/transacoes'
 import type { Cartao, Categoria, Transacao } from '@/types/financial'
 import { toast } from '@/hooks/use-toast'
 import { useAuth } from '@/context/AuthContext'
-import { ArrowLeft, CreditCard } from 'lucide-react'
+import { ArrowLeft, CreditCard, Repeat, TrendingUp } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+
+/** Escopo da edição de uma parcela: só ela, ou a série inteira (as não pagas). */
+export type EscopoEdicao = 'parcela' | 'serie'
+
+type DadosEdicao = {
+  descricao: string
+  valor: number
+  data: string // YYYY-MM-DD
+  cartao_id: string // '' para entradas
+  categoria_id: string
+  recorrente: boolean
+}
+
+/** Rótulo "(k/n)" da parcela dentro da série — sem sufixo quando é única. */
+const rotuloParcela = (base: string, numero: number, total: number): string =>
+  total > 1 ? `${base} (${numero}/${total})` : base
 
 /**
- * Edição de uma movimentação EXISTENTE — despesa de cartão. Abre o mesmo
- * formulário da nova movimentação, já preenchido com os dados atuais, e salva
- * com update() sobre o registro (nunca cria outro lançamento).
+ * Edição de uma movimentação EXISTENTE — despesa de cartão, despesa normal
+ * (sem cartão) ou entrada. Abre o formulário já preenchido com os dados
+ * atuais e salva com update() sobre o registro (nunca cria outro lançamento).
+ * Quando a movimentação pertence a uma série de parcelas com outras parcelas
+ * não pagas, oferece "só esta parcela" ou "todas as restantes da série".
  */
 export const EditarTransacaoPage: React.FC = () => {
   const { id } = useParams<{ id: string }>()
@@ -21,11 +47,8 @@ export const EditarTransacaoPage: React.FC = () => {
   const location = useLocation()
 
   // Tela de onde a edição foi aberta (Cartões, Extrato…): volta para ela ao salvar.
-  const paginaOrigem: string =
-    (location.state as { from?: string } | null)?.from &&
-    typeof (location.state as { from?: string }).from === 'string'
-      ? ((location.state as { from?: string }).from as string)
-      : '/cartoes'
+  const stateFrom = (location.state as { from?: string } | null)?.from
+  const paginaOrigem: string = typeof stateFrom === 'string' ? stateFrom : '/cartoes'
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -43,6 +66,15 @@ export const EditarTransacaoPage: React.FC = () => {
   const [recorrente, setRecorrente] = useState<'sim' | 'nao'>('nao')
   const { canAccessRecurring } = useAuth()
 
+  // Série: posição da parcela e quantas NÃO pagas existem além dela.
+  const [parcelaNumero, setParcelaNumero] = useState(0)
+  const [parcelaTotal, setParcelaTotal] = useState(0)
+  const [parcelasRestantes, setParcelasRestantes] = useState(0)
+
+  // Diálogo "só esta parcela" x "todas as restantes", com o envio pendente.
+  const [dialogSerie, setDialogSerie] = useState(false)
+  const [envioPendente, setEnvioPendente] = useState<DadosEdicao | null>(null)
+
   useEffect(() => {
     const load = async () => {
       if (!id) {
@@ -56,20 +88,23 @@ export const EditarTransacaoPage: React.FC = () => {
           cartoesService.list(),
           categoriasService.list(),
         ])
-        if (t.tipo !== 'despesa' || !t.cartao_id) {
-          // A edição dedicada cobre apenas despesas de cartão.
-          setNotFound(true)
-          return
-        }
         setTransacao(t)
         setCartoes(cs)
         setCategorias(cats)
-        setCartaoId(t.cartao_id)
+        setCartaoId(t.cartao_id || '')
         setDataReferencia(String(t.data).slice(0, 10))
         setNome(t.descricao)
         setValor(String(t.valor))
         setCategoriaId(t.categoria_id || '')
         setRecorrente(t.recorrente ? 'sim' : 'nao')
+        setParcelaNumero(t.parcela_numero ?? 0)
+        setParcelaTotal(t.parcela_total ?? 0)
+        if (t.serie_id) {
+          const serie = await transacoesService.listBySerie(t.serie_id)
+          setParcelasRestantes(serie.filter((p) => p.id !== t.id && !p.pago).length)
+        } else {
+          setParcelasRestantes(0)
+        }
       } catch (err) {
         console.error(err)
         setNotFound(true)
@@ -81,10 +116,13 @@ export const EditarTransacaoPage: React.FC = () => {
     load()
   }, [id])
 
-  const categoriaAtual = categorias.find((c) => c.id === categoriaId)
-  const categoriasDespesa = categorias.filter(
-    (c) => c.tipo === 'despesa' || c.tipo === 'ambos' || c.id === categoriaId,
-  )
+  const ehEntrada = transacao?.tipo === 'receita'
+
+  const categoriasAplicaveis = categorias.filter((c) => {
+    if (c.id === categoriaId) return true
+    if (ehEntrada) return c.tipo === 'receita' || c.tipo === 'ambos'
+    return c.tipo === 'despesa' || c.tipo === 'ambos'
+  })
 
   const cartaoSelecionado = cartoes.find((c) => c.id === cartaoId)
 
@@ -92,14 +130,93 @@ export const EditarTransacaoPage: React.FC = () => {
   // gasto no dia do vencimento ou depois cai na fatura do mês seguinte.
   const faturaPrevista = transacao
     ? mesDaFatura(
-        {
-          ...transacao,
-          data: dataReferencia,
-          cartao_id: cartaoId || undefined,
-        },
+        { ...transacao, data: dataReferencia, cartao_id: cartaoId || undefined },
         cartaoSelecionado ? [cartaoSelecionado] : cartoes,
       )
     : null
+
+  const ehSerie = Boolean(transacao?.serie_id) && parcelasRestantes > 0
+
+  /** Salva a edição no escopo escolhido (ou direto, quando não é série). */
+  const salvar = async (dados: DadosEdicao, escopo: EscopoEdicao | null) => {
+    if (!transacao) return
+    setSaving(true)
+    try {
+      if (ehEntrada) {
+        // Entrada: sem cartão (a relação é zerada) e sem parcelas.
+        await transacoesService.update(transacao.id, {
+          descricao: dados.descricao,
+          valor: dados.valor,
+          tipo: 'receita',
+          data: dados.data,
+          cartao_id: null,
+          categoria_id: dados.categoria_id,
+          recorrente: dados.recorrente,
+        })
+      } else if (escopo === 'serie' && transacao.serie_id) {
+        // 1) Aplica às OUTRAS parcelas não pagas, preservando o deslocamento
+        //    de faturas de cada uma em relação à editada (antes de mexer nela).
+        await transacoesService.updateSerie(transacao.serie_id, transacao, cartoes, {
+          descricao: dados.descricao,
+          valor: dados.valor,
+          data: dados.data,
+          cartao_id: dados.cartao_id,
+          categoria_id: dados.categoria_id,
+          recorrente: dados.recorrente,
+        })
+        // 2) A parcela editada recebe o mesmo tratamento, mantendo o SEU
+        //    número/total originais no sufixo "(k/n)" (as pagas ficam como estão).
+        await transacoesService.update(transacao.id, {
+          descricao: rotuloParcela(
+            descricaoBase(dados.descricao) || dados.descricao,
+            parcelaNumero || 1,
+            parcelaTotal || 1,
+          ),
+          valor: dados.valor,
+          data: dados.data,
+          cartao_id: dados.cartao_id || null,
+          categoria_id: dados.categoria_id,
+          recorrente: dados.recorrente,
+        })
+      } else {
+        // Parcela única (ou "só esta parcela"): nome mantém o sufixo "(k/n)"
+        // quando o usuário não digitou um novo; o total da série não muda.
+        const base = descricaoBase(dados.descricao)
+        const rotulo =
+          transacao.serie_id && base
+            ? rotuloParcela(base, parcelaNumero || 1, parcelaTotal || 1)
+            : dados.descricao
+        await transacoesService.update(transacao.id, {
+          descricao: rotulo,
+          valor: dados.valor,
+          tipo: 'despesa',
+          data: dados.data,
+          cartao_id: dados.cartao_id || null,
+          categoria_id: dados.categoria_id,
+          recorrente: dados.recorrente,
+        })
+      }
+
+      toast({
+        title:
+          escopo === 'serie'
+            ? `Série atualizada! ${parcelasRestantes + 1} parcelas foram alteradas.`
+            : 'Movimentação atualizada!',
+      })
+      navigate(paginaOrigem)
+    } catch (err) {
+      console.error(err)
+      toast({
+        variant: 'destructive',
+        title: 'Erro ao salvar',
+        description: 'Verifique os campos e tente novamente.',
+      })
+    } finally {
+      setSaving(false)
+      setDialogSerie(false)
+      setEnvioPendente(null)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -114,7 +231,9 @@ export const EditarTransacaoPage: React.FC = () => {
       toast({ variant: 'destructive', title: 'Informe um valor válido' })
       return
     }
-    if (!cartaoId) {
+    // Despesa "outras" (sem cartão) é válida: cartão só é obrigatório quando a
+    // transação editada JÁ tinha um (edição continua no mesmo modo).
+    if (!ehEntrada && transacao.cartao_id && !cartaoId) {
       toast({ variant: 'destructive', title: 'Selecione o cartão' })
       return
     }
@@ -123,33 +242,22 @@ export const EditarTransacaoPage: React.FC = () => {
       return
     }
 
-    setSaving(true)
-    try {
-      // Update sobre o registro existente — nunca cria movimentação nova.
-      await transacoesService.update(transacao.id, {
-        descricao: nome.trim(),
-        valor: valorNum,
-        tipo: 'despesa',
-        data: dataReferencia,
-        cartao_id: cartaoId,
-        categoria_id: categoriaId,
-        recorrente: canAccessRecurring && recorrente === 'sim',
-      })
-      toast({
-        title: 'Despesa atualizada!',
-        description: 'O valor foi atualizado na fatura e no extrato.',
-      })
-      navigate(paginaOrigem)
-    } catch (err) {
-      console.error(err)
-      toast({
-        variant: 'destructive',
-        title: 'Erro ao salvar',
-        description: 'Verifique os campos e tente novamente.',
-      })
-    } finally {
-      setSaving(false)
+    const dados: DadosEdicao = {
+      descricao: nome.trim(),
+      valor: valorNum,
+      data: dataReferencia,
+      cartao_id: ehEntrada ? '' : cartaoId,
+      categoria_id: categoriaId,
+      recorrente: canAccessRecurring && recorrente === 'sim',
     }
+
+    // Parcela de série com outras não pagas: pergunta o escopo antes de salvar.
+    if (!ehEntrada && ehSerie) {
+      setEnvioPendente(dados)
+      setDialogSerie(true)
+      return
+    }
+    await salvar(dados, null)
   }
 
   const inputCls =
@@ -172,7 +280,7 @@ export const EditarTransacaoPage: React.FC = () => {
           <div className="bg-white rounded-3xl p-8 text-center border border-[#EBE4F5]">
             <p className="text-sm font-bold text-gray-700">Movimentação não encontrada</p>
             <p className="text-xs text-gray-500 mt-1">
-              Ela pode ter sido excluída ou não é uma despesa de cartão.
+              Ela pode ter sido excluída ou não está mais disponível.
             </p>
             <button
               onClick={() => navigate(-1)}
@@ -204,29 +312,36 @@ export const EditarTransacaoPage: React.FC = () => {
               <ArrowLeft className="w-4 h-4 text-[#6639A6]" />
             </button>
             <h1 className="text-sm font-black text-[#1F1438] flex items-center gap-1.5">
-              <CreditCard className="w-4 h-4 text-[#6639A6]" />
-              Editar despesa do cartão
+              {ehEntrada ? (
+                <TrendingUp className="w-4 h-4 text-[#6639A6]" />
+              ) : (
+                <CreditCard className="w-4 h-4 text-[#6639A6]" />
+              )}
+              {ehEntrada ? 'Editar entrada' : 'Editar saída'}
             </h1>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-3">
-            {/* Cartão */}
-            <div>
-              <label className={labelCls}>Selecione o Cartão*</label>
-              <select
-                value={cartaoId}
-                onChange={(e) => setCartaoId(e.target.value)}
-                className={inputCls}
-                required
-              >
-                <option value="">Selecione o Cartão*</option>
-                {cartoes.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.nome}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {/* Cartão — só para despesas; entradas não têm cartão */}
+            {!ehEntrada && (
+              <div>
+                <label className={labelCls}>
+                  {transacao.cartao_id ? 'Selecione o Cartão*' : 'Cartão (opcional)'}
+                </label>
+                <select
+                  value={cartaoId}
+                  onChange={(e) => setCartaoId(e.target.value)}
+                  className={inputCls}
+                >
+                  <option value="">Sem cartão (outra despesa)</option>
+                  {cartoes.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.nome}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {/* Data de Referência */}
             <div>
@@ -242,12 +357,13 @@ export const EditarTransacaoPage: React.FC = () => {
 
             {/* Nome */}
             <div>
-              <label className={labelCls}>Nome da saída*</label>
+              <label className={labelCls}>
+                {ehEntrada ? 'Nome da entrada*' : 'Nome da saída*'}
+              </label>
               <input
                 type="text"
                 value={nome}
                 onChange={(e) => setNome(e.target.value)}
-                placeholder="Nome da saída*"
                 className={inputCls}
                 required
               />
@@ -263,7 +379,6 @@ export const EditarTransacaoPage: React.FC = () => {
                 inputMode="decimal"
                 value={valor}
                 onChange={(e) => setValor(e.target.value)}
-                placeholder="Valor*"
                 className={inputCls}
                 required
               />
@@ -279,7 +394,7 @@ export const EditarTransacaoPage: React.FC = () => {
                 required
               >
                 <option value="">Selecione a Categoria*</option>
-                {categoriasDespesa.map((c) => (
+                {categoriasAplicaveis.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.nome}
                   </option>
@@ -335,12 +450,23 @@ export const EditarTransacaoPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Prévia da fatura — regra do vencimento aplicada */}
-            {faturaPrevista && cartaoSelecionado && (
+            {/* Prévia da fatura — regra do vencimento aplicada (só despesas de cartão) */}
+            {!ehEntrada && faturaPrevista && cartaoSelecionado && (
               <p className="text-[11px] text-gray-500 bg-[#F6F3FB] rounded-xl px-3 py-2">
-                Este lançamento entra na{' '}
-                <strong>fatura de {rotuloMesFatura(faturaPrevista)}</strong> (vencimento dia{' '}
-                {cartaoSelecionado.dia_vencimento}).
+                Este lançamento entra na <strong>fatura de {rotuloFatura(faturaPrevista)}</strong>{' '}
+                (vencimento dia {cartaoSelecionado.dia_vencimento}).
+              </p>
+            )}
+
+            {/* Aviso de série */}
+            {transacao.serie_id && (
+              <p className="text-[11px] text-gray-500 bg-[#F6F3FB] rounded-xl px-3 py-2">
+                {parcelaNumero > 0 && parcelaTotal > 0
+                  ? `Esta é a parcela ${parcelaNumero} de ${parcelaTotal}. `
+                  : 'Esta movimentação faz parte de uma série de parcelas. '}
+                {parcelasRestantes > 0
+                  ? `Ao salvar, você escolhe se a edição vale só para esta parcela ou para as ${parcelasRestantes + 1} não pagas da série.`
+                  : 'As demais parcelas já estão pagas e não serão alteradas.'}
               </p>
             )}
 
@@ -365,13 +491,50 @@ export const EditarTransacaoPage: React.FC = () => {
         </div>
       </main>
 
+      {/* Escolha do escopo da edição em séries de parcelas */}
+      <Dialog open={dialogSerie} onOpenChange={(aberto) => !aberto && setDialogSerie(false)}>
+        <DialogContent className="max-w-sm rounded-3xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-sm font-black">
+              <Repeat className="w-4 h-4 text-[#6639A6]" />
+              Editar série de parcelas
+            </DialogTitle>
+            <DialogDescription className="text-xs text-gray-500">
+              Esta movimentação é a parcela {parcelaNumero} de {parcelaTotal}. Onde a edição deve
+              valer?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => envioPendente && salvar(envioPendente, 'parcela')}
+              className="w-full py-3 text-xs font-bold text-[#6639A6] rounded-2xl bg-[#F1EAF9] hover:bg-[#E3D5F5] disabled:opacity-60 transition"
+            >
+              Editar apenas esta parcela
+            </button>
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => envioPendente && salvar(envioPendente, 'serie')}
+              className="w-full py-3 text-xs font-bold text-white rounded-2xl bg-[#6639A6] hover:bg-[#522c8a] disabled:opacity-60 transition"
+            >
+              Editar todas as parcelas restantes ({parcelasRestantes + 1})
+            </button>
+          </div>
+          <DialogFooter className="sm:justify-center">
+            <button
+              type="button"
+              onClick={() => setDialogSerie(false)}
+              className="text-[11px] font-semibold text-gray-400 hover:text-gray-600"
+            >
+              Cancelar
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <BottomNav />
     </div>
   )
-}
-
-/** Rótulo "junho/2026" a partir de um mês "2026-06". */
-const rotuloMesFatura = (mesStr: string): string => {
-  const [ano, mes] = mesStr.split('-').map(Number)
-  return `${new Date(ano, mes - 1, 1).toLocaleDateString('pt-BR', { month: 'long' })}/${ano}`
 }

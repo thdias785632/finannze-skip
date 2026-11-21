@@ -187,6 +187,17 @@ export const ExtractPage: React.FC = () => {
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
+                      <button
+                        type="button"
+                        className="finz-icon-btn finz-primary-hover"
+                        aria-label={`Editar ${t.descricao}`}
+                        title="Editar lançamento"
+                        onClick={() =>
+                          navigate(`/editar-transacao/${t.id}`, { state: { from: '/extrato' } })
+                        }
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </div>
                 ))
@@ -236,7 +247,7 @@ export const ExtractPage: React.FC = () => {
                           aria-label={`Editar ${t.descricao}`}
                           title="Editar lançamento"
                           onClick={() =>
-                            navigate('/nova-transacao', { state: { from: '/extrato' } })
+                            navigate(`/editar-transacao/${t.id}`, { state: { from: '/extrato' } })
                           }
                         >
                           <Pencil className="w-3.5 h-3.5" />

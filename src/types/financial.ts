@@ -46,6 +46,15 @@ export interface Transacao {
   recorrente?: boolean
   recorrencia_periodo?: 'mensal' | 'anual'
   pago?: boolean
+  /**
+   * Identificador da série de parcelas (compra parcelada): as transações de
+   * uma mesma compra compartilham o mesmo valor. Vazio em lançamentos avulsos.
+   */
+  serie_id?: string
+  /** Número da parcela dentro da série (1-based); ausente fora de séries. */
+  parcela_numero?: number
+  /** Total de parcelas da série; ausente fora de séries. */
+  parcela_total?: number
   expand?: {
     cartao_id?: Cartao
     categoria_id?: Categoria
