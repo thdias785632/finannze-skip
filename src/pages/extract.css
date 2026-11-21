@@ -1,0 +1,270 @@
+/* ==========================================================================
+   Tela de Extrato — portada do views/extract/extract.component.html + .scss
+   do projeto original (prj-finanzze-front, Angular), com os tokens de
+   src/app/styles/_variables.scss.
+   Escopado sob .finz-extract para não regredir Início/Cartões/Imóveis.
+   ========================================================================== */
+
+.finz-extract {
+  --finz-primary: #6639a6;
+  --finz-primary-dark: #4a1f7a;
+  --finz-primary-light: #f2eafd;
+  --finz-text-dark: #1f2937;
+  --finz-text-muted: #52678f;
+  --finz-border-soft: #e4daf3;
+  --finz-red: #b20000;
+  --finz-green: #007505;
+  --finz-blue: #0065c1;
+  --finz-shadow-card: 0 1px 2px rgba(31, 20, 56, 0.04), 0 4px 16px rgba(31, 20, 56, 0.06);
+}
+
+/* ---------- Container ---------- */
+.finz-extract .finz-extract-container {
+  max-width: 490px;
+  margin: 0 auto;
+  padding: 12px 16px 160px; /* padding-bottom: 160px do original (footer + bottom nav) */
+}
+
+.finz-extract .finz-extract-item {
+  margin-bottom: 16px;
+  padding: 16px;
+  border-radius: 20px;
+  background-color: #fff;
+  box-shadow: var(--finz-shadow-card);
+  border: 1px solid var(--finz-border-soft);
+}
+
+.finz-extract .finz-extract-item h2,
+.finz-extract .finz-extract-item h1 {
+  margin: 0;
+  font-family: inherit;
+}
+
+/* ---------- Header do card ---------- */
+.finz-extract .finz-extract-header {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.finz-extract .finz-extract-header h2 {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--finz-primary-dark);
+}
+
+/* ---------- Botão "+" de adicionar ---------- */
+.finz-extract .finz-icon-btn-add {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--finz-primary-light);
+  color: var(--finz-primary);
+  cursor: pointer;
+  transition:
+    background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.1s;
+}
+.finz-extract .finz-icon-btn-add:hover {
+  background-color: #e3d5f5;
+}
+.finz-extract .finz-icon-btn-add:active {
+  transform: scale(0.94);
+}
+
+/* ---------- Linhas (revenue-item / expenses-item) ---------- */
+.finz-extract .finz-extract-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 52px;
+  gap: 8px;
+  border-bottom: 1px solid var(--finz-border-soft);
+  transition: background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.finz-extract .finz-extract-row:last-of-type {
+  border-bottom: none;
+}
+
+.finz-extract .finz-extract-row .finz-row-name {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--finz-text-dark);
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.finz-extract .finz-extract-row .finz-row-amount {
+  margin: 0;
+  flex-shrink: 0;
+  order: 2;
+  font-size: 15px;
+  font-weight: 600;
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.finz-extract .finz-extract-row .finz-row-actions {
+  order: 3;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.finz-extract .finz-row-revenue .finz-row-amount {
+  color: var(--finz-green);
+}
+.finz-extract .finz-row-expense .finz-row-amount {
+  color: var(--finz-red);
+}
+
+/* ---------- Botões de ícone (lixeira / lápis / olho) ---------- */
+.finz-extract .finz-icon-btn {
+  border: none;
+  background: transparent;
+  padding: 6px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #9ca3af;
+  cursor: pointer;
+  transition:
+    color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    background-color 0.2s;
+}
+.finz-extract .finz-icon-btn:hover {
+  background-color: #f6f3fb;
+}
+.finz-extract .finz-icon-btn.finz-danger:hover {
+  color: var(--finz-red);
+  background-color: #fdecec;
+}
+.finz-extract .finz-icon-btn.finz-primary-hover:hover {
+  color: var(--finz-primary);
+}
+
+/* ---------- Total (balance) ---------- */
+.finz-extract .finz-balance {
+  padding-top: 12px;
+  margin-top: 4px;
+  color: var(--finz-blue);
+}
+.finz-extract .finz-balance h2 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--finz-text-muted);
+}
+.finz-extract .finz-balance p {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--finz-blue);
+}
+
+/* ---------- Cartão: footer de navegação de mês ---------- */
+.finz-extract .finz-month-footer {
+  position: fixed;
+  bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 56px;
+  padding: 4px 8px;
+  background-color: #fff;
+  border-top: 1px solid var(--finz-border-soft);
+  box-shadow: 0 -4px 16px rgba(31, 20, 56, 0.12);
+  z-index: 30;
+}
+
+.finz-extract .finz-month-footer .finz-footer-inner {
+  width: 100%;
+  max-width: 490px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 12px;
+}
+
+.finz-extract .finz-month-footer span {
+  font-size: 16px;
+  font-weight: 600;
+  text-transform: capitalize;
+  font-variant-numeric: tabular-nums;
+  color: var(--finz-primary-dark);
+}
+
+.finz-extract .finz-month-footer button {
+  border: none;
+  background: transparent;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--finz-primary);
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+.finz-extract .finz-month-footer button:hover {
+  background-color: var(--finz-primary-light);
+}
+
+/* ---------- Chart ---------- */
+.finz-extract .finz-chart {
+  padding-top: 4px;
+}
+
+.finz-extract .finz-chart-title {
+  color: var(--finz-primary);
+  font-size: 24px;
+  font-weight: 400;
+  margin: 0;
+}
+.finz-extract .finz-chart-item {
+  padding-top: 16px;
+}
+
+/* ---------- Estados ---------- */
+.finz-extract .finz-empty {
+  padding: 24px 0;
+  text-align: center;
+  color: #9ca3af;
+  font-size: 13px;
+}
+.finz-extract .finz-loading {
+  padding: 40px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.finz-extract .finz-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--finz-primary);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: finz-spin 0.8s linear infinite;
+}
+@keyframes finz-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

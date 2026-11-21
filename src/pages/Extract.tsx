@@ -2,24 +2,29 @@ import React, { useState, useEffect } from 'react'
 import { AppHeader } from '@/components/AppHeader'
 import { BottomNav } from '@/components/BottomNav'
 import { DonutChart, type DonutSlice } from '@/components/DonutChart'
+import { CategoryDetail } from '@/components/CategoryDetail'
 import { cartoesService } from '@/services/cartoes'
-import { transacoesService } from '@/services/transacoes'
+import { transacoesService, mesDaFatura } from '@/services/transacoes'
 import type { Cartao, Transacao } from '@/types/financial'
 import { ChevronLeft, ChevronRight, Trash2, Pencil, Eye, Plus, Lock, Sparkles } from 'lucide-react'
 import { toast } from '@/hooks/use-toast'
 import { formatBRLPublic } from '@/lib/format'
 import { useAuth } from '@/context/AuthContext'
 import { Link, useNavigate } from 'react-router-dom'
+import './extract.css'
 
 /**
- * Tela de Extrato — espelho da tela do app original:
- * um gráfico "Gastos por Categoria" (donut) no topo, seguido dos cards
- * "Entradas do mês" e "Saídas do mês". Nas saídas, cada despesa sem cartão
- * tem sua própria linha e TODAS as despesas de cartão do mês somam em uma
- * única linha "Cartões" — o olho leva à aba Cartões (gasto por cartão).
+ * Tela de Extrato — portada 1:1 do views/extract do projeto original
+ * (prj-finanzze-front, Angular): card "Entradas do mês" e card "Saídas do mês"
+ * com os totais em azul, o rodapé de navegação de mês e o donut
+ * "Gastos por Categoria" (mesmo dashboard-chart da Home aprovada na 0.0.8).
+ * Nas saídas, cada despesa sem cartão tem sua própria linha e as despesas de
+ * cartão do mês somam em uma única linha "Cartão de Crédito" com o olho, que
+ * leva à aba Cartões (gasto por cartão).
  */
 export const ExtractPage: React.FC = () => {
   const { canAccessFutureExtract } = useAuth()
+  const navigate = useNavigate()
 
   // Mês selecionado (deslocamento em relação ao mês atual: 0 = atual, +1 = próximo)
   const [monthOffset, setMonthOffset] = useState<number>(0)
@@ -94,6 +99,11 @@ export const ExtractPage: React.FC = () => {
   const totalReceitas = receitas.reduce((acc, t) => acc + t.valor, 0)
   const totalDespesas = despesas.reduce((acc, t) => acc + t.valor, 0)
 
+  // Nome do cartão da linha consolidada. Com um único cartão, usa o nome dele
+  // ("Cartão de Crédito" do print); com vários, entra a contagem de lançamentos.
+  const nomeCartaoConsolidado = cartoes.length === 1 ? cartoes[0].nome : 'Cartão de Crédito'
+  const multiCartao = cartoes.length > 1
+
   // Agrupamento por categoria das despesas (para o donut)
   const catMap = new Map<string, { nome: string; cor: string; valor: number }>()
   despesas.forEach((t) => {
@@ -110,8 +120,6 @@ export const ExtractPage: React.FC = () => {
     }
   })
 
-  const totalReceitasAcum = receitas.reduce((acc, t) => acc + t.valor, 0)
-
   const donutData: DonutSlice[] = Array.from(catMap.entries())
     .filter(([, c]) => c.valor > 0)
     .sort((a, b) => b[1].valor - a[1].valor)
@@ -119,9 +127,9 @@ export const ExtractPage: React.FC = () => {
 
   // "Economia" é a categoria padrão que não se lança: é a diferença
   // entradas − saídas do mês, exibida no gráfico como no original.
-  const economia = totalReceitasAcum - totalDespesas
+  const economia = totalReceitas - totalDespesas
   if (economia > 0) {
-    donutData.push({ id: '__economia__', label: 'Economia', value: economia, color: '#4C1D95' })
+    donutData.push({ id: '__economia__', label: 'Economia', color: '#4C1D95', value: economia })
     donutData.sort((a, b) => b.value - a.value)
   }
 
@@ -131,107 +139,201 @@ export const ExtractPage: React.FC = () => {
     : []
 
   return (
-    <div className="min-h-screen bg-[#F6F3FB] text-[#1F1438] pb-24">
+    <div className="min-h-screen bg-[#F6F3FB] text-[#1F1438] finz-extract">
       <AppHeader />
 
-      <main className="max-w-md mx-auto px-4 pt-4 space-y-4">
+      <main className="finz-extract-main">
         {/* Bloqueio de Meses Futuros para Plano FREE */}
         {isLocked ? (
           <FutureLock />
         ) : (
-          <>
-            {/* Gráfico de Gastos por Categoria (igual ao da Home) */}
-            <section className="bg-white rounded-3xl p-5 shadow-[0_4px_24px_rgba(102,57,166,0.06)] border border-[#EBE4F5]">
-              <h2 className="text-base font-black text-[#1F1438] mb-2">Gastos por Categoria</h2>
-              {loading ? (
-                <LoadingBox />
-              ) : donutData.length === 0 ? (
-                <EmptyHint text="Nenhuma despesa registrada neste mês." />
-              ) : (
-                <DonutChart
-                  centerLabel="Total"
-                  centerValue={totalDespesas}
-                  slices={donutData}
-                  onSelectSlice={(id) => setCatDetalhe(catDetalhe === id ? null : id)}
-                  selectedId={catDetalhe}
-                />
-              )}
-            </section>
-
-            {/* Detalhe da categoria selecionada no gráfico */}
-            {catSelecionada && (
-              <CategoryDetail
-                nome={catSelecionada.label}
-                cor={catSelecionada.color}
-                valor={catSelecionada.value}
-                total={totalDespesas}
-                itens={gastosCatSelecionada}
-                onClose={() => setCatDetalhe(null)}
-              />
-            )}
-
+          <div className="finz-extract-container">
             {/* Card de Entradas do mês */}
-            <MonthEntriesCard
-              title="Entradas do mês"
-              titleClass="text-[#1F1438]"
-              itens={receitas}
-              total={totalReceitas}
-              onDelete={handleDelete}
-              onCreate={() => setMonthOffset(monthOffset)}
-            />
+            <div className="finz-extract-item finz-card-revenues">
+              <div className="finz-extract-header">
+                <h2>Entradas do mês</h2>
+                <button
+                  type="button"
+                  className="finz-icon-btn-add"
+                  aria-label="Adicionar entrada"
+                  onClick={() => navigate('/nova-transacao')}
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+
+              {receitas.length === 0 ? (
+                <EmptyHint text="Nada registrado neste mês." />
+              ) : (
+                receitas.map((t) => (
+                  <div key={t.id} className="finz-extract-row">
+                    <h2 className="finz-row-name">{t.descricao}</h2>
+                    <p className="finz-row-amount">+ R$ {formatBRLPublic(t.valor)}</p>
+                    <div className="finz-row-actions">
+                      <button
+                        type="button"
+                        className="finz-icon-btn finz-danger"
+                        aria-label={`Remover ${t.descricao}`}
+                        title="Excluir lançamento"
+                        onClick={() => handleDelete(t.id)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+
+              <div className="finz-balance">
+                <h2>Total</h2>
+                <p>R$ {formatBRLPublic(totalReceitas)}</p>
+              </div>
+            </div>
 
             {/* Card de Saídas do mês */}
-            <MonthEntriesCard
-              title="Saídas do mês"
-              titleClass="text-[#6639A6]"
-              itens={despesasSemCartao}
-              total={totalDespesas}
-              onDelete={handleDelete}
-              onCreate={() => setMonthOffset(monthOffset)}
-              cartoes={cartoes}
-              totalCartoes={totalCartoes}
-              qtdeLancamentosCartao={despesasCartao.length}
-            />
-          </>
+            <div className="finz-extract-item finz-card-expenses">
+              <div className="finz-extract-header">
+                <h2>Saídas do mês</h2>
+                <button
+                  type="button"
+                  className="finz-icon-btn-add"
+                  aria-label="Adicionar saída"
+                  onClick={() => navigate('/nova-transacao')}
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+
+              {despesasSemCartao.length === 0 && despesasCartao.length === 0 ? (
+                <EmptyHint text="Nada registrado neste mês." />
+              ) : (
+                <>
+                  {despesasSemCartao.map((t) => (
+                    <div key={t.id} className="finz-extract-row finz-row-expense">
+                      <h2 className="finz-row-name">{t.descricao}</h2>
+                      <p className="finz-row-amount">− R$ {formatBRLPublic(t.valor)}</p>
+                      <div className="finz-row-actions">
+                        <button
+                          type="button"
+                          className="finz-icon-btn finz-danger"
+                          aria-label={`Remover ${t.descricao}`}
+                          title="Excluir lançamento"
+                          onClick={() => handleDelete(t.id)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          className="finz-icon-btn finz-primary-hover"
+                          aria-label={`Editar ${t.descricao}`}
+                          title="Editar lançamento"
+                          onClick={() => navigate('/nova-transacao')}
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+
+                  {despesasCartao.length > 0 && (
+                    <div className="finz-extract-row finz-row-expense">
+                      <h2 className="finz-row-name">
+                        {nomeCartaoConsolidado}
+                        {multiCartao && (
+                          <span className="finz-row-count">
+                            {' '}
+                            ({despesasCartao.length}{' '}
+                            {despesasCartao.length === 1 ? 'lançamento' : 'lançamentos'})
+                          </span>
+                        )}
+                      </h2>
+                      <p className="finz-row-amount">− R$ {formatBRLPublic(totalCartoes)}</p>
+                      <div className="finz-row-actions">
+                        <button
+                          type="button"
+                          className="finz-icon-btn finz-primary-hover"
+                          aria-label="Ver extrato do cartão"
+                          title="Ver gasto por cartão"
+                          onClick={() => navigate('/cartoes')}
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              <div className="finz-balance">
+                <h2>Total</h2>
+                <p>R$ {formatBRLPublic(totalDespesas)}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Gráfico — Gastos por Categoria (igual ao da Home 0.0.8) */}
+        <section className="finz-extract-container finz-chart">
+          <h1 className="finz-chart-title">Gastos por Categoria</h1>
+          {loading ? (
+            <div className="finz-loading">
+              <span className="finz-spinner" />
+            </div>
+          ) : donutData.length === 0 ? (
+            <div className="finz-empty">Nenhuma despesa registrada neste mês.</div>
+          ) : (
+            <div className="finz-chart-item">
+              <DonutChart
+                centerLabel="Total"
+                centerValue={totalDespesas}
+                slices={donutData}
+                onSelectSlice={(id) => setCatDetalhe(catDetalhe === id ? null : id)}
+                selectedId={catDetalhe}
+              />
+            </div>
+          )}
+        </section>
+
+        {/* Detalhe da categoria selecionada no gráfico */}
+        {catSelecionada && (
+          <CategoryDetail
+            nome={catSelecionada.label}
+            cor={catSelecionada.color}
+            valor={catSelecionada.value}
+            total={totalDespesas}
+            itens={gastosCatSelecionada}
+            onClose={() => setCatDetalhe(null)}
+          />
         )}
       </main>
 
-      {/* Rodapé de navegação de mês */}
-      <footer className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-[#E5DEEE] py-2 shadow-[0_-4px_20px_rgba(102,57,166,0.06)]">
-        <div className="max-w-md mx-auto flex items-center justify-between px-4">
+      {/* Rodapé de navegação de mês — faixa branca horizontal do original */}
+      <footer className="finz-month-footer" aria-label="Seletor de mês">
+        <div className="finz-footer-inner">
           <button
             type="button"
             onClick={() => setMonthOffset((m) => m - 1)}
-            className="p-2 rounded-xl hover:bg-purple-50 text-[#6639A6] transition"
             aria-label="Mês anterior"
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
-          <span className="text-sm font-bold capitalize text-[#1F1438]">{monthLabel}</span>
+          <span>{monthLabel}</span>
           <button
             type="button"
             onClick={() => setMonthOffset((m) => m + 1)}
-            className="p-2 rounded-xl hover:bg-purple-50 text-[#6639A6] transition"
             aria-label="Próximo mês"
           >
             <ChevronRight className="w-5 h-5" />
           </button>
         </div>
       </footer>
+
       <BottomNav />
     </div>
   )
 }
 
-const LoadingBox: React.FC = () => (
-  <div className="py-12 text-center text-xs text-gray-400">
-    <span className="inline-block w-5 h-5 border-2 border-[#6639A6] border-t-transparent rounded-full animate-spin" />
-  </div>
-)
-
-const EmptyHint: React.FC<{ text: string }> = ({ text }) => (
-  <div className="py-8 text-center text-xs text-gray-400">{text}</div>
-)
+const EmptyHint: React.FC<{ text: string }> = ({ text }) => <div className="finz-empty">{text}</div>
 
 const FutureLock: React.FC = () => (
   <div className="bg-white rounded-3xl p-8 text-center border border-purple-200 shadow-md mt-4">
@@ -253,204 +355,3 @@ const FutureLock: React.FC = () => (
     </Link>
   </div>
 )
-
-interface MonthEntriesCardProps {
-  title: string
-  titleClass: string
-  itens: Transacao[]
-  total: number
-  onDelete: (id: string) => void
-  onCreate?: () => void
-  cartoes?: Cartao[]
-  totalCartoes?: number
-  qtdeLancamentosCartao?: number
-}
-
-const MonthEntriesCard: React.FC<MonthEntriesCardProps> = ({
-  title,
-  titleClass,
-  itens,
-  total,
-  onDelete,
-  cartoes,
-  totalCartoes = 0,
-  qtdeLancamentosCartao = 0,
-}) => {
-  const navigate = useNavigate()
-  const temConsolidadoCartoes = cartoes !== undefined
-  return (
-    <section className="bg-white rounded-3xl p-5 shadow-[0_4px_24px_rgba(102,57,166,0.06)] border border-[#EBE4F5]">
-      <div className="flex items-center justify-between mb-2">
-        <h3 className={`text-sm font-black ${titleClass}`}>{title}</h3>
-        <button
-          type="button"
-          onClick={() => navigate('/nova-transacao')}
-          className="w-8 h-8 rounded-full bg-[#F1EAF9] text-[#6639A6] flex items-center justify-center hover:bg-[#E3D5F5] transition"
-          aria-label={`Adicionar ${title}`}
-        >
-          <Plus className="w-4 h-4" />
-        </button>
-      </div>
-
-      {temConsolidadoCartoes ? (
-        /* Saídas: linha por despesa sem cartão + UMA linha consolidada de cartões */
-        <>
-          {itens.length === 0 && qtdeLancamentosCartao === 0 ? (
-            <EmptyHint text="Nada registrado neste mês." />
-          ) : (
-            <div className="divide-y divide-gray-100">
-              {itens.map((t) => (
-                <div key={t.id} className="flex items-center justify-between py-3">
-                  <span className="text-xs font-semibold text-[#1F1438] truncate min-w-0">
-                    {t.descricao}
-                  </span>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-xs font-black tabular-nums text-rose-600">
-                      − {formatBRLPublic(t.valor)}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => navigate('/nova-transacao')}
-                      className="p-1 text-gray-400 hover:text-[#6639A6] transition"
-                      title="Editar lançamento"
-                    >
-                      <Pencil className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onDelete(t.id)}
-                      className="p-1 text-gray-400 hover:text-red-500 transition"
-                      title="Excluir lançamento"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-
-              {qtdeLancamentosCartao > 0 && (
-                <div className="flex items-center justify-between py-3">
-                  <span className="text-xs font-semibold text-[#1F1438]">
-                    Cartões ({qtdeLancamentosCartao}{' '}
-                    {qtdeLancamentosCartao === 1 ? 'lançamento' : 'lançamentos'})
-                  </span>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-xs font-black tabular-nums text-rose-600">
-                      − {formatBRLPublic(totalCartoes)}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => navigate('/cartoes')}
-                      className="p-1 text-gray-400 hover:text-[#6639A6] transition"
-                      title="Ver gasto por cartão"
-                    >
-                      <Eye className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </>
-      ) : /* Entradas: uma linha por lançamento */
-      itens.length === 0 ? (
-        <EmptyHint text="Nada registrado neste mês." />
-      ) : (
-        <div className="divide-y divide-gray-100">
-          {itens.map((t) => (
-            <div key={t.id} className="flex items-center justify-between py-3">
-              <span className="text-xs font-semibold text-[#1F1438] truncate min-w-0">
-                {t.descricao}
-              </span>
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="text-xs font-black tabular-nums text-emerald-600">
-                  + {formatBRLPublic(t.valor)}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => navigate('/nova-transacao')}
-                  className="p-1 text-gray-400 hover:text-[#6639A6] transition"
-                  title="Editar lançamento"
-                >
-                  <Pencil className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onDelete(t.id)}
-                  className="p-1 text-gray-400 hover:text-red-500 transition"
-                  title="Excluir lançamento"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div className="pt-3 mt-1 border-t border-gray-100">
-        <span className="text-[11px] text-gray-500 font-semibold">Total</span>
-        <p className="text-sm font-black text-[#1D4ED8]">{formatBRLPublic(total)}</p>
-      </div>
-    </section>
-  )
-}
-
-interface CategoryDetailProps {
-  nome: string
-  cor: string
-  valor: number
-  total: number
-  itens: Transacao[]
-  onClose: () => void
-}
-
-const CategoryDetail: React.FC<CategoryDetailProps> = ({
-  nome,
-  cor,
-  valor,
-  total,
-  itens,
-  onClose,
-}) => {
-  const pct = total > 0 ? ((valor / total) * 100).toFixed(1).replace('.', ',') : '0'
-  return (
-    <section className="bg-white rounded-3xl p-5 shadow-[0_4px_24px_rgba(102,57,166,0.06)] border border-[#EBE4F5]">
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: cor }} />
-          <h3 className="text-sm font-black text-[#1F1438] truncate">{nome}</h3>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="text-[11px] font-bold text-[#6639A6] hover:underline"
-        >
-          Fechar
-        </button>
-      </div>
-
-      <p className="text-[11px] text-gray-500 mb-3">
-        {pct}% dos gastos deste mês •{' '}
-        <strong className="text-[#1F1438]">{formatBRLPublic(valor)}</strong>
-      </p>
-
-      {itens.length === 0 ? (
-        <EmptyHint text="Nenhum gasto nesta categoria no mês." />
-      ) : (
-        <div className="divide-y divide-gray-100">
-          {itens.map((t) => (
-            <div key={t.id} className="flex items-center justify-between py-2.5">
-              <span className="text-xs font-semibold text-[#1F1438] truncate min-w-0">
-                {t.descricao}
-              </span>
-              <span className="text-xs font-black text-rose-600 tabular-nums shrink-0">
-                − {formatBRLPublic(t.valor)}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-    </section>
-  )
-}
