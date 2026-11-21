@@ -280,41 +280,46 @@ export const ExtractPage: React.FC = () => {
               </div>
             </div>
           </div>
-          {/* Gráfico — Gastos por Categoria (igual ao da Home 0.0.8) */}
-          <section className="finz-extract-container finz-chart">
-            <h1 className="finz-chart-title">Gastos por Categoria</h1>
-            {loading ? (
-              <div className="finz-loading">
-                <span className="finz-spinner" />
-              </div>
-            ) : donutData.length === 0 ? (
-              <div className="finz-empty">Nenhuma despesa registrada neste mês.</div>
-            ) : (
-              <div className="finz-chart-item">
-                <DonutChart
-                  centerLabel="Total"
-                  centerValue={totalReceitas}
-                  slices={donutData}
-                  onSelectSlice={(id) => setCatDetalhe(catDetalhe === id ? null : id)}
-                  selectedId={catDetalhe}
+        )}
+
+        {!isLocked && (
+          <div>
+            {/* Gráfico — Gastos por Categoria (igual ao da Home 0.0.8) */}
+            <section className="finz-extract-container finz-chart">
+              <h1 className="finz-chart-title">Gastos por Categoria</h1>
+              {loading ? (
+                <div className="finz-loading">
+                  <span className="finz-spinner" />
+                </div>
+              ) : donutData.length === 0 ? (
+                <div className="finz-empty">Nenhuma despesa registrada neste mês.</div>
+              ) : (
+                <div className="finz-chart-item">
+                  <DonutChart
+                    centerLabel="Total"
+                    centerValue={totalReceitas}
+                    slices={donutData}
+                    onSelectSlice={(id) => setCatDetalhe(catDetalhe === id ? null : id)}
+                    selectedId={catDetalhe}
+                  />
+                </div>
+              )}
+            </section>
+
+            {/* Detalhe da categoria selecionada no gráfico */}
+            {catSelecionada && (
+              <div ref={detailRef} className="finz-extract-container finz-detail">
+                <CategoryDetail
+                  nome={catSelecionada.label}
+                  cor={catSelecionada.color}
+                  valor={catSelecionada.value}
+                  total={totalReceitas}
+                  itens={gastosCatSelecionada}
+                  onClose={() => setCatDetalhe(null)}
                 />
               </div>
             )}
-          </section>
-
-          {/* Detalhe da categoria selecionada no gráfico */}
-          {catSelecionada && (
-            <div ref={detailRef} className="finz-extract-container finz-detail">
-              <CategoryDetail
-                nome={catSelecionada.label}
-                cor={catSelecionada.color}
-                valor={catSelecionada.value}
-                total={totalReceitas}
-                itens={gastosCatSelecionada}
-                onClose={() => setCatDetalhe(null)}
-              />
-            </div>
-          )}
+          </div>
         )}
       </main>
 
