@@ -309,7 +309,7 @@ export const ExtractPage: React.FC = () => {
               nome={catSelecionada.label}
               cor={catSelecionada.color}
               valor={catSelecionada.value}
-              total={totalDespesas}
+              total={totalReceitas}
               itens={gastosCatSelecionada}
               onClose={() => setCatDetalhe(null)}
             />
