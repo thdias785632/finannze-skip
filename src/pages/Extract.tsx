@@ -34,6 +34,14 @@ export const ExtractPage: React.FC = () => {
 
   // Detalhe de categoria aberto a partir do donut
   const [catDetalhe, setCatDetalhe] = useState<string | null>(null)
+  const detailRef = React.useRef<HTMLDivElement | null>(null)
+
+  // Ao selecionar fatia/categoria no donut, rola até a lista de gastos dela
+  useEffect(() => {
+    if (catDetalhe && detailRef.current) {
+      detailRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [catDetalhe])
 
   const targetDate = new Date()
   targetDate.setMonth(targetDate.getMonth() + monthOffset)
@@ -166,7 +174,7 @@ export const ExtractPage: React.FC = () => {
                 <EmptyHint text="Nada registrado neste mês." />
               ) : (
                 receitas.map((t) => (
-                  <div key={t.id} className="finz-extract-row">
+                  <div key={t.id} className="finz-extract-row finz-row-revenue">
                     <h2 className="finz-row-name">{t.descricao}</h2>
                     <p className="finz-row-amount">+ R$ {formatBRLPublic(t.valor)}</p>
                     <div className="finz-row-actions">
@@ -296,14 +304,16 @@ export const ExtractPage: React.FC = () => {
 
         {/* Detalhe da categoria selecionada no gráfico */}
         {catSelecionada && (
-          <CategoryDetail
-            nome={catSelecionada.label}
-            cor={catSelecionada.color}
-            valor={catSelecionada.value}
-            total={totalDespesas}
-            itens={gastosCatSelecionada}
-            onClose={() => setCatDetalhe(null)}
-          />
+          <div ref={detailRef} className="finz-extract-container finz-detail">
+            <CategoryDetail
+              nome={catSelecionada.label}
+              cor={catSelecionada.color}
+              valor={catSelecionada.value}
+              total={totalDespesas}
+              itens={gastosCatSelecionada}
+              onClose={() => setCatDetalhe(null)}
+            />
+          </div>
         )}
       </main>
 

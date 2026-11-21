@@ -22,7 +22,11 @@
 .finz-extract .finz-extract-container {
   max-width: 490px;
   margin: 0 auto;
-  padding: 12px 16px 160px; /* padding-bottom: 160px do original (footer + bottom nav) */
+  padding: 12px 16px 0; /* o espaço do rodapé/bottom-nav fica no <main> */
+}
+
+.finz-extract .finz-detail {
+  padding-top: 0;
 }
 
 .finz-extract .finz-extract-item {
@@ -229,7 +233,14 @@
 
 /* ---------- Chart ---------- */
 .finz-extract .finz-chart {
-  padding-top: 4px;
+  /* card branco do print: donut sobre área branca, logo abaixo dos cards.
+     Sem margin-top: o próprio card de Saídas já dá os 16px de respiro. */
+  margin-top: 0;
+  padding: 16px;
+  background-color: #fff;
+  border-radius: 20px;
+  border: 1px solid var(--finz-border-soft);
+  box-shadow: var(--finz-shadow-card);
 }
 
 .finz-extract .finz-chart-title {
@@ -267,4 +278,9 @@
   to {
     transform: rotate(360deg);
   }
+}
+
+/* ---------- Main da página: espaço do rodapé fixo + bottom nav ---------- */
+.finz-extract .finz-extract-main {
+  padding-bottom: 160px;
 }

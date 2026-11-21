@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react'
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { AppHeader } from '@/components/AppHeader'
 import { BottomNav } from '@/components/BottomNav'
@@ -39,6 +39,14 @@ export const DashboardPage: React.FC = () => {
   const [cartoes, setCartoes] = useState<Cartao[]>([])
   const [loading, setLoading] = useState(true)
   const [catDetalhe, setCatDetalhe] = useState<string | null>(null)
+  const detailRef = useRef<HTMLDivElement | null>(null)
+
+  // Ao clicar numa fatia/categoria, rola até a lista de gastos da categoria
+  useEffect(() => {
+    if (catDetalhe && detailRef.current) {
+      detailRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [catDetalhe])
 
   const targetDate = new Date()
   targetDate.setMonth(targetDate.getMonth() + monthOffset)
@@ -263,14 +271,16 @@ export const DashboardPage: React.FC = () => {
 
         {/* Detalhe da categoria selecionada no gráfico — igual ao original */}
         {catSelecionada && (
-          <CategoryDetail
-            nome={catSelecionada.label}
-            cor={catSelecionada.color}
-            valor={catSelecionada.value}
-            total={totalDespesas}
-            itens={gastosCatSelecionada}
-            onClose={() => setCatDetalhe(null)}
-          />
+          <div ref={detailRef}>
+            <CategoryDetail
+              nome={catSelecionada.label}
+              cor={catSelecionada.color}
+              valor={catSelecionada.value}
+              total={totalDespesas}
+              itens={gastosCatSelecionada}
+              onClose={() => setCatDetalhe(null)}
+            />
+          </div>
         )}
       </main>
 

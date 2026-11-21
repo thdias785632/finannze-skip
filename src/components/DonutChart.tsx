@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 
 export interface DonutSlice {
   /** Identificador estável da fatia (id da categoria). */
@@ -37,13 +37,18 @@ const DonutChart: React.FC<DonutChartProps> = ({
     selectedId && slices.length > 0 ? slices.findIndex((s) => s.id === selectedId) : -1
   const active = controlledIndex >= 0 ? controlledIndex : internalActive
 
+  // Fatia selecionada pelo pai — o estado interno só vale quando o pai
+  // não controla a seleção (senão as duas fontes brigam).
+  useEffect(() => {
+    if (selectedId === null) setInternalActive(null)
+  }, [selectedId])
+
   const setActive = (index: number | null) => {
     setInternalActive(index)
     if (onSelectSlice) {
       const slice = index !== null ? slices[index] : null
       if (slice?.id) onSelectSlice(slice.id)
       else if (index === null) onSelectSlice('')
-      else if (slice) onSelectSlice(slice.label)
     }
   }
 
