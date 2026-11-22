@@ -2,10 +2,13 @@ import React from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { LayoutDashboard, ReceiptText, CreditCard, Building2, Users, Crown } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
+import { useTemImovelCompartilhado } from '@/hooks/use-tem-imovel-compartilhado'
 
 export const BottomNav: React.FC = () => {
   const location = useLocation()
   const { plan, canAccessImoveis } = useAuth()
+  const temImovelCompartilhado = useTemImovelCompartilhado()
+  const verImoveis = canAccessImoveis || temImovelCompartilhado
 
   const navItems = [
     {
@@ -26,7 +29,7 @@ export const BottomNav: React.FC = () => {
       icon: CreditCard,
       active: location.pathname.startsWith('/cartoes'),
     },
-    ...(canAccessImoveis
+    ...(verImoveis
       ? [
           {
             to: '/imoveis',

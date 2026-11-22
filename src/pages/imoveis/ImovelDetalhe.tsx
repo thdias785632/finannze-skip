@@ -29,7 +29,7 @@ import { formatBRLPublic } from '@/lib/format'
 import type { Imovel, TipoFluxo } from '@/types/financial'
 import { FluxoDialog } from './FluxoDialog'
 import { CompartilharImovelDialog } from '@/components/CompartilharImovelDialog'
-import { Share2, Users } from 'lucide-react'
+import { Share2, Users, UsersRound } from 'lucide-react'
 
 const REF_MESES = [
   'Referência: 2 meses antes do vencimento',
@@ -51,18 +51,28 @@ export const ImovelDetalhe: React.FC = () => {
   const [defasagem, setDefasagem] = useState(2)
   const [savingCorrecao, setSavingCorrecao] = useState(false)
   const [showCompartilhar, setShowCompartilhar] = useState(false)
+  const [erro, setErro] = useState(false)
+
+  // Dono = quem criou; quem recebeu o imóvel compartilhado só vê (e edita parcelas)
+  const souDono = !!imovel && !imovel.compartilhado
 
   const load = React.useCallback(async () => {
     if (!id) return
-    const imv = await imoveisService.get(id)
-    setImovel(imv)
-    setMesBase(imv.mes_base_incc)
-    setDefasagem(imv.defasagem_incc ?? imv.defasagem_meses ?? 2)
-    const idx = await imoveisService.listarIndicesINCC()
-    setIndices(idx)
-    const fl = await imoveisService.listarFluxos(imv.id)
-    const ps = await imoveisService.listarParcelas(fl.map((f) => f.id))
-    setFluxosCalc(calcularImovel(imv, fl, ps, idx))
+    try {
+      const imv = await imoveisService.get(id)
+      setErro(false)
+      setImovel(imv)
+      setMesBase(imv.mes_base_incc)
+      setDefasagem(imv.defasagem_incc ?? imv.defasagem_meses ?? 2)
+      const idx = await imoveisService.listarIndicesINCC()
+      setIndices(idx)
+      const fl = await imoveisService.listarFluxos(imv.id)
+      const ps = await imoveisService.listarParcelas(fl.map((f) => f.id))
+      setFluxosCalc(calcularImovel(imv, fl, ps, idx))
+    } catch {
+      // Regra "view" do back: só dono ou quem está em compartilhado_com
+      setErro(true)
+    }
   }, [id])
 
   useEffect(() => {
@@ -73,6 +83,23 @@ export const ImovelDetalhe: React.FC = () => {
     if (!fluxosCalc || fluxosCalc.totalParcelas === 0) return 0
     return Math.round((fluxosCalc.parcelasPagas / fluxosCalc.totalParcelas) * 100)
   }, [fluxosCalc])
+
+  if (erro) {
+    return (
+      <div className="min-h-screen bg-[#F5F3F7] pb-24">
+        <AppHeader />
+        <div className="max-w-md mx-auto px-4 pt-10 text-center text-gray-500">
+          <p className="text-sm">Imóvel não encontrado ou sem permissão de acesso.</p>
+          <button
+            onClick={() => navigate('/imoveis')}
+            className="mt-4 text-sm font-semibold text-[#6639A6]"
+          >
+            Voltar para Imóveis
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   if (!imovel) {
     return (
@@ -145,14 +172,24 @@ export const ImovelDetalhe: React.FC = () => {
                 ` · Contrato de ${new Date(imovel.data_contrato).toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' })}`}
             </p>
           </div>
-          {/* Compartilhar — membros do grupo podem ver e editar */}
-          <button
-            onClick={() => setShowCompartilhar(true)}
-            className="p-2 rounded-full bg-white shadow-sm border border-[#ECE6F2] hover:bg-[#F6F3FB] transition shrink-0"
-            aria-label="Compartilhar imóvel"
-          >
-            <Share2 className="w-4 h-4 text-[#6639A6]" />
-          </button>
+          {/* Compartilhar — só o dono do imóvel gerencia o compartilhamento */}
+          {souDono ? (
+            <button
+              onClick={() => setShowCompartilhar(true)}
+              className="p-2 rounded-full bg-white shadow-sm border border-[#ECE6F2] hover:bg-[#F6F3FB] transition shrink-0"
+              aria-label="Compartilhar imóvel"
+            >
+              <Share2 className="w-4 h-4 text-[#6639A6]" />
+            </button>
+          ) : (
+            <span
+              className="p-2 rounded-full bg-white shadow-sm border border-[#ECE6F2] shrink-0"
+              aria-label="Imóvel compartilhado com você"
+              title="Imóvel compartilhado com você"
+            >
+              <UsersRound className="w-4 h-4 text-[#6639A6]" />
+            </span>
+          )}
         </div>
 
         {/* Valor do imóvel = soma dos fluxos (nunca informado na criação) */}
@@ -279,12 +316,14 @@ export const ImovelDetalhe: React.FC = () => {
         {/* Fluxo de pagamento */}
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-bold text-[#1F1235]">Fluxo de pagamento</h2>
-          <button
-            onClick={() => setShowFluxo(true)}
-            className="text-sm font-semibold text-[#6639A6] inline-flex items-center gap-1"
-          >
-            <Plus className="w-4 h-4" /> Fluxo
-          </button>
+          {souDono && (
+            <button
+              onClick={() => setShowFluxo(true)}
+              className="text-sm font-semibold text-[#6639A6] inline-flex items-center gap-1"
+            >
+              <Plus className="w-4 h-4" /> Fluxo
+            </button>
+          )}
         </div>
 
         {fluxosCalc && fluxosCalc.fluxos.length === 0 && (
