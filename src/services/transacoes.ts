@@ -393,6 +393,26 @@ export const transacoesService = {
   },
 
   /**
+   * Exclusão de despesa de cartão. Com escopo 'uma', remove APENAS o
+   * lançamento informado — as demais parcelas da série ficam intocadas, cada
+   * uma no seu mês de fatura (nada é recalculado ou renomeado; os sufixos
+   * "(k/n)" permanecem como estão). Com escopo 'todas', remove todos os
+   * lançamentos que compartilham o serie_id. NÃO usa recriarSerie.
+   */
+  async excluir(alvo: Transacao, escopo: 'uma' | 'todas'): Promise<string[]> {
+    if (escopo === 'uma' || !alvo.serie_id) {
+      await this.delete(alvo.id)
+      return [alvo.id]
+    }
+    const serie = await this.listBySerie(alvo.serie_id)
+    const ids = serie.map((p) => p.id)
+    for (const id of ids) {
+      await this.delete(id)
+    }
+    return ids
+  },
+
+  /**
    * Cria a movimentação e, quando `parcelas` > 1 no cartão, divide o valor em
    * N lançamentos mensais futuros (como no app original): a 1ª parcela usa a
    * data informada e as demais avançam um mês por vez. A regra de qual fatura

@@ -19,6 +19,10 @@ import {
 } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { toast } from '@/hooks/use-toast'
+import {
+  ExcluirDespesaCartaoDialog,
+  pedirExclusaoDespesaCartao,
+} from '@/components/ExcluirDespesaCartao'
 import { formatBRLPublic } from '@/lib/format'
 import { useAuth } from '@/context/AuthContext'
 import { Link, useNavigate } from 'react-router-dom'
@@ -46,6 +50,9 @@ export const ExtractPage: React.FC = () => {
   const [cartoes, setCartoes] = useState<Cartao[]>([])
   // Modal "olho" — despesas de cartão do mês agrupadas por cartão
   const [modalCartoesAberto, setModalCartoesAberto] = useState(false)
+  // Exclusão de despesa de cartão (dialog de escopo p/ parceladas)
+  const [alvoExclusao, setAlvoExclusao] = useState<Transacao | null>(null)
+  const [dialogExclusaoAberto, setDialogExclusaoAberto] = useState(false)
 
   // Detalhe de categoria aberto a partir do donut
   const [catDetalhe, setCatDetalhe] = useState<string | null>(null)
@@ -129,6 +136,20 @@ export const ExtractPage: React.FC = () => {
 
   // Modal do olho: despesas de cartão do mês agrupadas por cartão — só entram
   // cartões que TÊM despesa naquele mês de referência.
+  const clicouExcluirCartao = async (t: Transacao) => {
+    const pedido = await pedirExclusaoDespesaCartao(t)
+    if (pedido.tipo === 'dialog') {
+      setAlvoExclusao(pedido.transacao)
+      setDialogExclusaoAberto(true)
+    } else if (pedido.ids.length > 0) {
+      removerTransacoes(pedido.ids)
+    }
+  }
+
+  const removerTransacoes = (ids: string[]) => {
+    setTransacoes((prev) => prev.filter((t) => !ids.includes(t.id)))
+  }
+
   const cartoesComDespesa = useMemo(() => {
     const mapa = new Map<string, { cartao: Cartao | null; itens: Transacao[]; total: number }>()
     for (const t of despesasCartao) {
@@ -433,6 +454,15 @@ export const ExtractPage: React.FC = () => {
                           </span>
                           <button
                             type="button"
+                            className="p-1.5 rounded-full hover:bg-rose-50 transition"
+                            aria-label={`Excluir ${t.descricao}`}
+                            title="Excluir lançamento"
+                            onClick={() => void clicouExcluirCartao(t)}
+                          >
+                            <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                          </button>
+                          <button
+                            type="button"
                             className="p-1.5 rounded-full hover:bg-[#F1EAF9] transition"
                             aria-label={`Editar ${t.descricao}`}
                             title="Editar lançamento"
@@ -452,6 +482,14 @@ export const ExtractPage: React.FC = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Dialog de exclusão de despesa de cartão (escopo uma/todas) */}
+      <ExcluirDespesaCartaoDialog
+        transacao={alvoExclusao}
+        open={dialogExclusaoAberto}
+        onOpenChange={setDialogExclusaoAberto}
+        onExcluidas={removerTransacoes}
+      />
 
       <BottomNav />
     </div>

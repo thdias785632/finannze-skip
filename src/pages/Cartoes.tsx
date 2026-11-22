@@ -8,6 +8,10 @@ import { CreditCard, Plus, X, Trash2, Pencil } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from '@/hooks/use-toast'
 import { formatBRLPublic } from '@/lib/format'
+import {
+  ExcluirDespesaCartaoDialog,
+  pedirExclusaoDespesaCartao,
+} from '@/components/ExcluirDespesaCartao'
 
 /**
  * Tela de Cartões — lista os cartões do usuário com o resumo das faturas
@@ -25,6 +29,10 @@ export const CartoesPage: React.FC = () => {
   const [nomeCartao, setNomeCartao] = useState('')
   const [diaVenc, setDiaVenc] = useState('10')
   const [saving, setSaving] = useState(false)
+
+  // Exclusão de despesa de cartão (dialog de escopo p/ parceladas)
+  const [alvoExclusao, setAlvoExclusao] = useState<Transacao | null>(null)
+  const [dialogExclusaoAberto, setDialogExclusaoAberto] = useState(false)
 
   const load = async () => {
     try {
@@ -77,6 +85,20 @@ export const CartoesPage: React.FC = () => {
 
   const abrirEdicao = (id: string) => {
     navigate(`/editar-transacao/${id}`, { state: { from: '/cartoes' } })
+  }
+
+  const clicouExcluir = async (t: Transacao) => {
+    const pedido = await pedirExclusaoDespesaCartao(t)
+    if (pedido.tipo === 'dialog') {
+      setAlvoExclusao(pedido.transacao)
+      setDialogExclusaoAberto(true)
+    } else if (pedido.ids.length > 0) {
+      removerDaLista(pedido.ids)
+    }
+  }
+
+  const removerDaLista = (ids: string[]) => {
+    setTransacoes((prev) => prev.filter((t) => !ids.includes(t.id)))
   }
 
   const excluirCartao = async (id: string) => {
@@ -218,6 +240,7 @@ export const CartoesPage: React.FC = () => {
                   itens={faturaAtual}
                   total={soma(faturaAtual)}
                   onEditar={abrirEdicao}
+                  onExcluir={clicouExcluir}
                 />
 
                 {/* Fatura do próximo mês */}
@@ -226,12 +249,20 @@ export const CartoesPage: React.FC = () => {
                   itens={faturaProxima}
                   total={soma(faturaProxima)}
                   onEditar={abrirEdicao}
+                  onExcluir={clicouExcluir}
                 />
               </div>
             )
           })
         )}
       </main>
+
+      <ExcluirDespesaCartaoDialog
+        transacao={alvoExclusao}
+        open={dialogExclusaoAberto}
+        onOpenChange={setDialogExclusaoAberto}
+        onExcluidas={removerDaLista}
+      />
 
       <BottomNav />
     </div>
@@ -243,7 +274,8 @@ const FaturaCard: React.FC<{
   itens: Transacao[]
   total: number
   onEditar: (id: string) => void
-}> = ({ titulo, itens, total, onEditar }) => (
+  onExcluir: (t: Transacao) => void
+}> = ({ titulo, itens, total, onEditar, onExcluir }) => (
   <section className="bg-white rounded-3xl p-5 shadow-[0_4px_24px_rgba(102,57,166,0.06)] border border-[#EBE4F5]">
     <div className="flex items-center justify-between mb-2">
       <h3 className="text-sm font-black text-[#6639A6]">{titulo}</h3>
@@ -258,6 +290,15 @@ const FaturaCard: React.FC<{
               {t.descricao}
             </span>
             <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                className="p-1 rounded-full text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition"
+                aria-label={`Excluir ${t.descricao}`}
+                title="Excluir despesa"
+                onClick={() => onExcluir(t)}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
               <button
                 type="button"
                 className="p-1 rounded-full text-gray-400 hover:text-[#6639A6] hover:bg-[#F1EAF9] transition"
