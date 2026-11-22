@@ -9,7 +9,14 @@ const mapImovel = (r: Record<string, unknown>): Imovel => {
     user_id: String(rec.user_id),
     nome: String(rec.nome),
     construtora: rec.construtora ? String(rec.construtora) : undefined,
-    valor_original: Number(rec.valor_original),
+    valor_original:
+      rec.valor_original != null && rec.valor_original !== ''
+        ? Number(rec.valor_original)
+        : undefined,
+    compartilhado_com: Array.isArray(rec.compartilhado_com)
+      ? (rec.compartilhado_com as string[])
+      : undefined,
+    compartilhado: Boolean(rec.user_id) && rec.user_id !== pb.authStore.record?.id,
     data_contrato: rec.data_contrato ? String(rec.data_contrato) : undefined,
     mes_base_incc: String(rec.mes_base_incc || ''),
     defasagem_meses: rec.defasagem_meses != null ? Number(rec.defasagem_meses) : undefined,
@@ -40,7 +47,7 @@ export const imoveisService = {
       user_id: userId,
       nome: data.nome,
       construtora: data.construtora,
-      valor_original: data.valor_original,
+      valor_original: data.valor_original != null ? Number(data.valor_original) : undefined,
       compartilhado_com: data.compartilhado_com,
       data_contrato: data.data_contrato,
       mes_base_incc: data.mes_base_incc,
@@ -55,7 +62,21 @@ export const imoveisService = {
   },
 
   async update(id: string, data: Partial<Imovel>): Promise<Imovel> {
-    return mapImovel(await pb.collection('imoveis').update(id, data))
+    const payload: Record<string, unknown> = {}
+    if (data.nome !== undefined) payload.nome = data.nome
+    if (data.construtora !== undefined) payload.construtora = data.construtora
+    if (data.valor_original !== undefined)
+      payload.valor_original = data.valor_original != null ? Number(data.valor_original) : null
+    if (data.compartilhado_com !== undefined) payload.compartilhado_com = data.compartilhado_com
+    if (data.data_contrato !== undefined) payload.data_contrato = data.data_contrato
+    if (data.mes_base_incc !== undefined) payload.mes_base_incc = data.mes_base_incc
+    if (data.defasagem_incc !== undefined) payload.defasagem_incc = data.defasagem_incc
+    if (data.defasagem_meses !== undefined) payload.defasagem_meses = data.defasagem_meses
+    if (data.data_chaves !== undefined) payload.data_chaves = data.data_chaves
+    if (data.data_financiamento !== undefined) payload.data_financiamento = data.data_financiamento
+    if (data.data_entrega !== undefined) payload.data_entrega = data.data_entrega
+    if (data.observacoes !== undefined) payload.observacoes = data.observacoes
+    return mapImovel(await pb.collection('imoveis').update(id, payload))
   },
 
   async delete(id: string): Promise<boolean> {

@@ -1,5 +1,6 @@
 import pb from '@/lib/pocketbase/client'
-import type { Transacao, TipoTransacao, Cartao } from '@/types/financial'
+import type { Transacao, TipoTransacao, Cartao, TransacaoDivisao } from '@/types/financial'
+import { gruposService } from '@/services/grupos'
 
 /**
  * Regra da fatura: um lançamento feito no dia do vencimento do cartão ou
@@ -60,6 +61,7 @@ const mapTransacao = (r: Record<string, any>): Transacao => ({
   serie_id: r.serie_id || undefined,
   parcela_numero: r.parcela_numero ? Number(r.parcela_numero) : undefined,
   parcela_total: r.parcela_total ? Number(r.parcela_total) : undefined,
+  dividido_com: Array.isArray(r.dividido_com) ? (r.dividido_com as string[]) : undefined,
   expand: {
     cartao_id: r.expand?.cartao_id
       ? {
@@ -95,6 +97,108 @@ export const transacoesService = {
       expand: 'cartao_id,categoria_id',
     })
     return mapTransacao(r)
+  },
+
+  /**
+   * Grava a divisão da transação entre membros do grupo: apaga as divisões
+   * anteriores e cria uma linha em transacoes_divisoes por membro escolhido,
+   * além de gravar dividido_com na própria transação (é o que dá acesso do
+   * membro ao lançamento e o que aparece na lista dele). O restante do valor
+   * (se sobrar) fica com o dono.
+   */
+  async salvarDivisoes(
+    transacaoId: string,
+    valorTotal: number,
+    membros: { user_id: string; valor: number }[],
+  ): Promise<void> {
+    const atuais = await pb.collection('transacoes_divisoes').getFullList({
+      filter: `transacao_id = "${transacaoId}"`,
+    })
+    for (const d of atuais) {
+      await pb.collection('transacoes_divisoes').delete(d.id)
+    }
+    if (membros.length === 0) {
+      // Sem divisão: limpa também dividido_com na transação.
+      await pb.collection('transacoes').update(transacaoId, { dividido_com: [] })
+      return
+    }
+    await pb
+      .collection('transacoes_divisoes')
+      .create(
+        membros
+          .filter((m) => m.user_id && m.valor > 0)
+          .map((m) => ({ transacao_id: transacaoId, user_id: m.user_id, valor: m.valor })),
+      )
+    await pb.collection('transacoes').update(transacaoId, {
+      dividido_com: membros.map((m) => m.user_id),
+    })
+  },
+
+  /** Divisões gravadas de uma transação (vazio = não dividida). */
+  async listarDivisoes(transacaoId: string): Promise<TransacaoDivisao[]> {
+    const records = await pb.collection('transacoes_divisoes').getFullList({
+      filter: `transacao_id = "${transacaoId}"`,
+    })
+    return records.map((r) => ({
+      id: r.id,
+      transacao_id: r.transacao_id,
+      user_id: r.user_id,
+      valor: Number(r.valor),
+    }))
+  },
+
+  /**
+   * Grava a divisão junto com a criação/edição da transação. Aceita o id da
+   * transação OU a própria transação recém-criada/recriada: quando a operação
+   * gerou uma SÉRIE (parcelas), a divisão é replicada para TODAS as parcelas
+   * da série — cada parcela fica dividida com as mesmas pessoas, nas mesmas
+   * proporções, e o lançamento aparece na lista de cada membro.
+   */
+  async aplicarDivisao(
+    alvo: Transacao | { id: string; valor: number; serie_id?: string },
+    divisao: { user_id: string; valor: number }[],
+  ): Promise<void> {
+    if (divisao.length === 0) {
+      // Sem divisão: garante dividido_com limpo (idempotente).
+      await pb.collection('transacoes').update(alvo.id, { dividido_com: [] })
+      return
+    }
+    if (alvo.serie_id) {
+      const serie = await this.listBySerie(alvo.serie_id)
+      for (const parcela of serie) {
+        await this.salvarDivisoes(
+          parcela.id,
+          parcela.valor,
+          divisao.map((d) => ({
+            user_id: d.user_id,
+            valor: (parcela.valor / Math.max(alvo.valor, 0.000001)) * d.valor,
+          })),
+        )
+      }
+      return
+    }
+    await this.salvarDivisoes(alvo.id, alvo.valor, divisao)
+  },
+
+  /** Divisões de todas as transações informadas, agrupadas por transacao_id. */
+  async listarDivisoesDeVarias(ids: string[]): Promise<Record<string, TransacaoDivisao[]>> {
+    const resultado: Record<string, TransacaoDivisao[]> = {}
+    if (ids.length === 0) return resultado
+    const filtro = ids.map((id) => `transacao_id = "${id}"`).join(' || ')
+    const records = await pb
+      .collection('transacoes_divisoes')
+      .getFullList({ filter: filtro })
+      .catch(() => [] as Record<string, any>[])
+    for (const r of records) {
+      const chave = String(r.transacao_id)
+      ;(resultado[chave] ||= []).push({
+        id: r.id,
+        transacao_id: chave,
+        user_id: r.user_id,
+        valor: Number(r.valor),
+      })
+    }
+    return resultado
   },
 
   /**
@@ -176,6 +280,7 @@ export const transacoesService = {
       recorrente?: boolean
       parcelas: number
     },
+    divisao?: { user_id: string; valor: number }[],
   ): Promise<number> {
     const userId = pb.authStore.record?.id
     if (!userId) throw new Error('Usuário não autenticado')
@@ -186,6 +291,19 @@ export const transacoesService = {
     const ids = new Set<string>(serie.map((p) => p.id))
     ids.add(alvo.id)
     for (const idExcluir of ids) {
+      // As divisões (transacoes_divisoes) das parcelas antigas são apagadas
+      // junto — as regras da coleção permitem apagar quando sou o dono da
+      // transação ou o usuário da divisão.
+      const antigas = await pb
+        .collection('transacoes_divisoes')
+        .getFullList({ filter: `transacao_id = "${idExcluir}"` })
+        .catch(() => [] as Record<string, any>[])
+      for (const d of antigas) {
+        await pb
+          .collection('transacoes_divisoes')
+          .delete(d.id)
+          .catch(() => {})
+      }
       await pb.collection('transacoes').delete(idExcluir)
     }
 
@@ -200,13 +318,14 @@ export const transacoesService = {
           `serie:${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
         : ''
 
+    const criadas: Transacao[] = []
     for (let k = 1; k <= n; k++) {
       const d = new Date(ano, mes - 1 + (k - 1), 1)
       const ultimoDia = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
       const dia = Math.min(diaStr || 1, ultimoDia)
       const dataParcela = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(dia).padStart(2, '0')}`
 
-      await this.create({
+      const criada = await this.create({
         descricao: n > 1 ? `${dados.descricao} (${k}/${n})` : dados.descricao,
         valor: dados.valor / n,
         tipo: 'despesa',
@@ -219,6 +338,23 @@ export const transacoesService = {
         parcela_numero: n > 1 ? k : undefined,
         parcela_total: n > 1 ? n : undefined,
       })
+      criadas.push(criada)
+    }
+
+    // 3) Divisão: replicada para todas as parcelas da série recriada — cada
+    //    parcela leva a mesma proporção do total definida no formulário.
+    if (divisao && divisao.length > 0 && dados.valor > 0) {
+      const valorParcela = dados.valor / n
+      for (const parcela of criadas) {
+        await this.salvarDivisoes(
+          parcela.id,
+          parcela.valor,
+          divisao.map((d) => ({
+            user_id: d.user_id,
+            valor: Math.round((d.valor / dados.valor) * valorParcela * 100) / 100,
+          })),
+        )
+      }
     }
     return n
   },
@@ -314,6 +450,8 @@ export const transacoesService = {
       serie_id: r.serie_id || undefined,
       parcela_numero: r.parcela_numero ? Number(r.parcela_numero) : undefined,
       parcela_total: r.parcela_total ? Number(r.parcela_total) : undefined,
+      dividido_com: Array.isArray(r.dividido_com) ? (r.dividido_com as string[]) : undefined,
+      compartilhada: Boolean(r.user_id) && r.user_id !== pb.authStore.record?.id,
       expand: {
         cartao_id: r.expand?.cartao_id
           ? {
@@ -370,6 +508,7 @@ export const transacoesService = {
     serie_id?: string
     parcela_numero?: number
     parcela_total?: number
+    dividido_com?: string[]
   }): Promise<Transacao> {
     const userId = pb.authStore.record?.id
     if (!userId) throw new Error('Usuário não autenticado')
@@ -391,6 +530,9 @@ export const transacoesService = {
         serie_id: data.serie_id || '',
         parcela_numero: data.parcela_numero,
         parcela_total: data.parcela_total,
+        ...(data.dividido_com && data.dividido_com.length > 0
+          ? { dividido_com: data.dividido_com }
+          : {}),
       },
       {
         expand: 'cartao_id,categoria_id',
@@ -429,13 +571,27 @@ export const transacoesService = {
    * lançamentos que compartilham o serie_id. NÃO usa recriarSerie.
    */
   async excluir(alvo: Transacao, escopo: 'uma' | 'todas'): Promise<string[]> {
+    const apagarDivisoes = async (transacaoId: string) => {
+      const antigas = await pb
+        .collection('transacoes_divisoes')
+        .getFullList({ filter: `transacao_id = "${transacaoId}"` })
+        .catch(() => [] as Record<string, any>[])
+      for (const d of antigas) {
+        await pb
+          .collection('transacoes_divisoes')
+          .delete(d.id)
+          .catch(() => {})
+      }
+    }
     if (escopo === 'uma' || !alvo.serie_id) {
+      await apagarDivisoes(alvo.id)
       await this.delete(alvo.id)
       return [alvo.id]
     }
     const serie = await this.listBySerie(alvo.serie_id)
     const ids = serie.map((p) => p.id)
     for (const id of ids) {
+      await apagarDivisoes(id)
       await this.delete(id)
     }
     return ids
@@ -447,16 +603,20 @@ export const transacoesService = {
    * data informada e as demais avançam um mês por vez. A regra de qual fatura
    * cada parcela entra continua sendo a do dia de vencimento (mesDaFatura).
    */
-  async createComParcelas(data: {
-    descricao: string
-    valor: number
-    tipo: TipoTransacao
-    data: string // YYYY-MM-DD
-    categoriaId?: string
-    cartaoId?: string
-    parcelas?: number
-    recorrente?: boolean
-  }): Promise<Transacao[]> {
+  async createComParcelas(
+    data: {
+      descricao: string
+      valor: number
+      tipo: TipoTransacao
+      data: string // YYYY-MM-DD
+      categoriaId?: string
+      cartaoId?: string
+      parcelas?: number
+      recorrente?: boolean
+      divididoCom?: string[]
+    },
+    divisao?: { user_id: string; valor: number }[],
+  ): Promise<Transacao[]> {
     const n = Math.max(1, Math.min(24, data.parcelas || 1))
     const base = data.data.slice(0, 10)
     const [ano, mes, dia] = base.split('-').map(Number)
@@ -480,8 +640,24 @@ export const transacoesService = {
         serie_id: serieId,
         parcela_numero: n > 1 ? i + 1 : undefined,
         parcela_total: n > 1 ? n : undefined,
+        dividido_com: data.divididoCom,
       })
       criadas.push(criada)
+    }
+
+    // Divisão: replicada para todas as parcelas da série criada.
+    if (divisao && divisao.length > 0 && data.valor > 0) {
+      const valorParcela = data.valor / n
+      for (const parcela of criadas) {
+        await this.salvarDivisoes(
+          parcela.id,
+          parcela.valor,
+          divisao.map((d) => ({
+            user_id: d.user_id,
+            valor: Math.round((d.valor / data.valor) * valorParcela * 100) / 100,
+          })),
+        )
+      }
     }
     return criadas
   },

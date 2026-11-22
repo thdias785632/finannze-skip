@@ -23,6 +23,14 @@ export interface Cartao {
 
 export type TipoTransacao = 'receita' | 'despesa'
 
+/** Quanto do valor de uma transação cabe a cada membro do grupo. */
+export interface TransacaoDivisao {
+  id: string
+  transacao_id: string
+  user_id: string
+  valor: number
+}
+
 export interface Categoria {
   id: string
   nome: string
@@ -60,6 +68,8 @@ export interface Transacao {
    * cada pessoa (o restante, se sobrar, é do dono). Vazio = só do usuário.
    */
   divisoes?: TransacaoDivisao[]
+  /** Usuários (membros do grupo) com quem o valor foi dividido. */
+  dividido_com?: string[]
   /** true quando a transação foi criada por outra pessoa e compartilhada comigo */
   compartilhada?: boolean
   expand?: {
@@ -75,7 +85,8 @@ export interface Imovel {
   user_id: string
   nome: string
   construtora?: string
-  valor_original: number
+  /** Valor informado na criação; ausente = derivado da soma dos fluxos. */
+  valor_original?: number
   data_contrato?: string
   mes_base_incc: string
   defasagem_meses?: number
@@ -142,4 +153,12 @@ export interface IndiceINCC {
   data_referencia: string
   variacao_mensal: number
   fonte?: string
+}
+
+/** Uma fatia da divisão de uma transação entre membros do grupo. */
+export interface TransacaoDivisao {
+  id: string
+  transacao_id: string
+  user_id: string
+  valor: number
 }
