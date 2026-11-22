@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { AppHeader } from '@/components/AppHeader'
 import { BottomNav } from '@/components/BottomNav'
 import { DonutChart, type DonutSlice } from '@/components/DonutChart'
@@ -6,7 +6,18 @@ import { CategoryDetail } from '@/components/CategoryDetail'
 import { cartoesService } from '@/services/cartoes'
 import { transacoesService, mesDaFatura } from '@/services/transacoes'
 import type { Cartao, Transacao } from '@/types/financial'
-import { ChevronLeft, ChevronRight, Trash2, Pencil, Eye, Plus, Lock, Sparkles } from 'lucide-react'
+import {
+  ChevronLeft,
+  ChevronRight,
+  Trash2,
+  Pencil,
+  Eye,
+  Plus,
+  Lock,
+  Sparkles,
+  X,
+} from 'lucide-react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { toast } from '@/hooks/use-toast'
 import { formatBRLPublic } from '@/lib/format'
 import { useAuth } from '@/context/AuthContext'
@@ -20,7 +31,9 @@ import './extract.css'
  * "Gastos por Categoria" (mesmo dashboard-chart da Home aprovada na 0.0.8).
  * Nas saídas, cada despesa sem cartão tem sua própria linha e as despesas de
  * cartão do mês somam em uma única linha "Cartão de Crédito" com o olho, que
- * leva à aba Cartões (gasto por cartão).
+ * abre um modal com as despesas do mês de referência agrupadas por cartão.
+ * O modal lista apenas os cartões com despesas naquele mês; o lápis de cada
+ * despesa abre a mesma tela de edição /editar-transacao/:id.
  */
 export const ExtractPage: React.FC = () => {
   const { canAccessFutureExtract } = useAuth()
@@ -31,6 +44,8 @@ export const ExtractPage: React.FC = () => {
   const [transacoes, setTransacoes] = useState<Transacao[]>([])
   const [loading, setLoading] = useState(true)
   const [cartoes, setCartoes] = useState<Cartao[]>([])
+  // Modal "olho" — despesas de cartão do mês agrupadas por cartão
+  const [modalCartoesAberto, setModalCartoesAberto] = useState(false)
 
   // Detalhe de categoria aberto a partir do donut
   const [catDetalhe, setCatDetalhe] = useState<string | null>(null)
@@ -111,6 +126,20 @@ export const ExtractPage: React.FC = () => {
   // ("Cartão de Crédito" do print); com vários, entra a contagem de lançamentos.
   const nomeCartaoConsolidado = cartoes.length === 1 ? cartoes[0].nome : 'Cartão de Crédito'
   const multiCartao = cartoes.length > 1
+
+  // Modal do olho: despesas de cartão do mês agrupadas por cartão — só entram
+  // cartões que TÊM despesa naquele mês de referência.
+  const cartoesComDespesa = useMemo(() => {
+    const mapa = new Map<string, { cartao: Cartao | null; itens: Transacao[]; total: number }>()
+    for (const t of despesasCartao) {
+      const cartao = cartoes.find((c) => c.id === t.cartao_id) || null
+      const entry = mapa.get(t.cartao_id!) || { cartao, itens: [], total: 0 }
+      entry.itens.push(t)
+      entry.total += t.valor
+      mapa.set(t.cartao_id!, entry)
+    }
+    return Array.from(mapa.values())
+  }, [despesasCartao, cartoes])
 
   // Agrupamento por categoria das despesas (para o donut)
   const catMap = new Map<string, { nome: string; cor: string; valor: number }>()
@@ -273,9 +302,9 @@ export const ExtractPage: React.FC = () => {
                         <button
                           type="button"
                           className="finz-icon-btn finz-primary-hover"
-                          aria-label="Ver extrato do cartão"
-                          title="Ver gasto por cartão"
-                          onClick={() => navigate('/cartoes')}
+                          aria-label="Ver despesas dos cartões"
+                          title="Ver despesas de cartão do mês"
+                          onClick={() => setModalCartoesAberto(true)}
                         >
                           <Eye className="w-4 h-4" />
                         </button>
@@ -354,6 +383,75 @@ export const ExtractPage: React.FC = () => {
           </button>
         </div>
       </footer>
+
+      {/* Modal: despesas de cartão do mês, agrupadas por cartão */}
+      <Dialog open={modalCartoesAberto} onOpenChange={setModalCartoesAberto}>
+        <DialogContent className="max-w-md rounded-3xl border border-[#EBE4F5] bg-[#F6F3FB] p-5 shadow-[0_4px_24px_rgba(102,57,166,0.15)] max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-sm font-black text-[#1F1438]">
+              Cartões de crédito — {monthLabel}
+            </DialogTitle>
+          </DialogHeader>
+
+          {cartoesComDespesa.length === 0 ? (
+            <p className="text-xs text-gray-500 py-4 text-center">
+              Nenhuma despesa de cartão neste mês.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {cartoesComDespesa.map((grupo, gi) => (
+                <div
+                  key={grupo.cartao?.id || gi}
+                  className="bg-white rounded-2xl border border-[#EBE4F5] p-4"
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs font-black text-[#1F1438] flex items-center gap-2">
+                      <span
+                        className="inline-block w-2.5 h-2.5 rounded-full"
+                        style={{ backgroundColor: grupo.cartao?.cor || '#6639A6' }}
+                      />
+                      {grupo.cartao?.nome || 'Cartão'}
+                    </span>
+                    <span className="text-xs font-bold text-[#6639A6]">
+                      {formatBRLPublic(grupo.total)}
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {grupo.itens.map((t) => (
+                      <div key={t.id} className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold text-[#1F1438] truncate">
+                            {t.descricao}
+                          </p>
+                          <p className="text-[10px] text-gray-500">
+                            ref. {String(t.data).slice(8, 10)}/{String(t.data).slice(5, 7)}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-xs font-bold text-gray-700">
+                            {formatBRLPublic(t.valor)}
+                          </span>
+                          <button
+                            type="button"
+                            className="p-1.5 rounded-full hover:bg-[#F1EAF9] transition"
+                            aria-label={`Editar ${t.descricao}`}
+                            title="Editar lançamento"
+                            onClick={() =>
+                              navigate(`/editar-transacao/${t.id}`, { state: { from: '/extrato' } })
+                            }
+                          >
+                            <Pencil className="w-3.5 h-3.5 text-[#6639A6]" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <BottomNav />
     </div>

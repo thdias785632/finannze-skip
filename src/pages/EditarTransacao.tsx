@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { useNavigate, useParams, useLocation, Link } from 'react-router-dom'
+import { Link, useNavigate, useParams, useLocation } from 'react-router-dom'
 import { AppHeader } from '@/components/AppHeader'
 import { BottomNav } from '@/components/BottomNav'
 import { cartoesService } from '@/services/cartoes'
@@ -8,18 +8,7 @@ import { transacoesService, mesDaFatura, descricaoBase, rotuloFatura } from '@/s
 import type { Cartao, Categoria, Transacao } from '@/types/financial'
 import { toast } from '@/hooks/use-toast'
 import { useAuth } from '@/context/AuthContext'
-import { ArrowLeft, CreditCard, Repeat, TrendingUp } from 'lucide-react'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-
-/** Escopo da edição de uma parcela: só ela, ou a série inteira (as não pagas). */
-export type EscopoEdicao = 'parcela' | 'serie'
+import { ArrowLeft, CreditCard, TrendingUp } from 'lucide-react'
 
 type DadosEdicao = {
   descricao: string
@@ -28,18 +17,18 @@ type DadosEdicao = {
   cartao_id: string // '' para entradas
   categoria_id: string
   recorrente: boolean
+  parcelas: number // 1 quando não é de cartão
 }
-
-/** Rótulo "(k/n)" da parcela dentro da série — sem sufixo quando é única. */
-const rotuloParcela = (base: string, numero: number, total: number): string =>
-  total > 1 ? `${base} (${numero}/${total})` : base
 
 /**
  * Edição de uma movimentação EXISTENTE — despesa de cartão, despesa normal
  * (sem cartão) ou entrada. Abre o formulário já preenchido com os dados
  * atuais e salva com update() sobre o registro (nunca cria outro lançamento).
- * Quando a movimentação pertence a uma série de parcelas com outras parcelas
- * não pagas, oferece "só esta parcela" ou "todas as restantes da série".
+ *
+ * Quando a movimentação pertence a uma série de parcelas, a edição vale para
+ * a série INTEIRA (todas as parcelas, pagas ou não), SEM dialog de escopo.
+ * O número de parcelas também pode ser alterado: a série é recalculada
+ * (cria/remove/renumera as parcelas) pelo recalcularParcelas() do serviço.
  */
 export const EditarTransacaoPage: React.FC = () => {
   const { id } = useParams<{ id: string }>()
@@ -63,17 +52,13 @@ export const EditarTransacaoPage: React.FC = () => {
   const [nome, setNome] = useState('')
   const [valor, setValor] = useState('')
   const [categoriaId, setCategoriaId] = useState('')
+  const [parcelas, setParcelas] = useState('1')
   const [recorrente, setRecorrente] = useState<'sim' | 'nao'>('nao')
   const { canAccessRecurring } = useAuth()
 
-  // Série: posição da parcela e quantas NÃO pagas existem além dela.
+  // Série: posição da parcela e tamanho atual da série.
   const [parcelaNumero, setParcelaNumero] = useState(0)
   const [parcelaTotal, setParcelaTotal] = useState(0)
-  const [parcelasRestantes, setParcelasRestantes] = useState(0)
-
-  // Diálogo "só esta parcela" x "todas as restantes", com o envio pendente.
-  const [dialogSerie, setDialogSerie] = useState(false)
-  const [envioPendente, setEnvioPendente] = useState<DadosEdicao | null>(null)
 
   useEffect(() => {
     const load = async () => {
@@ -93,18 +78,14 @@ export const EditarTransacaoPage: React.FC = () => {
         setCategorias(cats)
         setCartaoId(t.cartao_id || '')
         setDataReferencia(String(t.data).slice(0, 10))
-        setNome(t.descricao)
+        // Nome SEM o sufixo "(k/n)" — a renumeração vem do campo Parcelas.
+        setNome(descricaoBase(t.descricao) || t.descricao)
         setValor(String(t.valor))
         setCategoriaId(t.categoria_id || '')
+        setParcelas(String(t.parcela_total && t.parcela_total > 1 ? t.parcela_total : 1))
         setRecorrente(t.recorrente ? 'sim' : 'nao')
         setParcelaNumero(t.parcela_numero ?? 0)
         setParcelaTotal(t.parcela_total ?? 0)
-        if (t.serie_id) {
-          const serie = await transacoesService.listBySerie(t.serie_id)
-          setParcelasRestantes(serie.filter((p) => p.id !== t.id && !p.pago).length)
-        } else {
-          setParcelasRestantes(0)
-        }
       } catch (err) {
         console.error(err)
         setNotFound(true)
@@ -135,10 +116,12 @@ export const EditarTransacaoPage: React.FC = () => {
       )
     : null
 
-  const ehSerie = Boolean(transacao?.serie_id) && parcelasRestantes > 0
+  // Número de parcelas efetivo: no cartão, o campo editável (1-24). Fora do
+  // cartão (outras despesas e entradas) não há parcelas.
+  const ehParcelado = !ehEntrada && Boolean(cartaoId)
+  const numParcelas = Math.max(1, Math.min(24, Number(parcelas) || 1))
 
-  /** Salva a edição no escopo escolhido (ou direto, quando não é série). */
-  const salvar = async (dados: DadosEdicao, escopo: EscopoEdicao | null) => {
+  const salvar = async (dados: DadosEdicao) => {
     if (!transacao) return
     setSaving(true)
     try {
@@ -153,41 +136,40 @@ export const EditarTransacaoPage: React.FC = () => {
           categoria_id: dados.categoria_id,
           recorrente: dados.recorrente,
         })
-      } else if (escopo === 'serie' && transacao.serie_id) {
-        // 1) Aplica às OUTRAS parcelas não pagas, preservando o deslocamento
-        //    de faturas de cada uma em relação à editada (antes de mexer nela).
-        await transacoesService.updateSerie(transacao.serie_id, transacao, cartoes, {
-          descricao: dados.descricao,
-          valor: dados.valor,
-          data: dados.data,
-          cartao_id: dados.cartao_id,
-          categoria_id: dados.categoria_id,
-          recorrente: dados.recorrente,
-        })
-        // 2) A parcela editada recebe o mesmo tratamento, mantendo o SEU
-        //    número/total originais no sufixo "(k/n)" (as pagas ficam como estão).
-        await transacoesService.update(transacao.id, {
-          descricao: rotuloParcela(
-            descricaoBase(dados.descricao) || dados.descricao,
-            parcelaNumero || 1,
-            parcelaTotal || 1,
-          ),
-          valor: dados.valor,
-          data: dados.data,
-          cartao_id: dados.cartao_id || null,
-          categoria_id: dados.categoria_id,
-          recorrente: dados.recorrente,
-        })
+      } else if (transacao.serie_id) {
+        // Série: a edição vale para a série INTEIRA, sem exceção e sem
+        // perguntar escopo. Com parcelas alteradas, recalcula a série
+        // (cria/remove/renumera; cada parcela mantém seu mês de fatura).
+        if (dados.parcelas !== parcelaTotal) {
+          await transacoesService.recalcularParcelas(
+            transacao.serie_id,
+            transacao,
+            cartoes,
+            dados.parcelas,
+            {
+              descricao: dados.descricao,
+              valor: dados.valor,
+              data: dados.data,
+              cartao_id: dados.cartao_id,
+              categoria_id: dados.categoria_id,
+              recorrente: dados.recorrente,
+            },
+          )
+        } else {
+          await transacoesService.updateSerie(transacao.serie_id, transacao, cartoes, {
+            descricao: dados.descricao,
+            valor: dados.valor,
+            data: dados.data,
+            cartao_id: dados.cartao_id,
+            categoria_id: dados.categoria_id,
+            recorrente: dados.recorrente,
+          })
+        }
       } else {
-        // Parcela única (ou "só esta parcela"): nome mantém o sufixo "(k/n)"
-        // quando o usuário não digitou um novo; o total da série não muda.
-        const base = descricaoBase(dados.descricao)
-        const rotulo =
-          transacao.serie_id && base
-            ? rotuloParcela(base, parcelaNumero || 1, parcelaTotal || 1)
-            : dados.descricao
+        // Lançamento único: update() sobre o registro, sem tocar na série de
+        // ninguém (não há série).
         await transacoesService.update(transacao.id, {
-          descricao: rotulo,
+          descricao: dados.descricao,
           valor: dados.valor,
           tipo: 'despesa',
           data: dados.data,
@@ -197,12 +179,7 @@ export const EditarTransacaoPage: React.FC = () => {
         })
       }
 
-      toast({
-        title:
-          escopo === 'serie'
-            ? `Série atualizada! ${parcelasRestantes + 1} parcelas foram alteradas.`
-            : 'Movimentação atualizada!',
-      })
+      toast({ title: 'Movimentação atualizada!' })
       navigate(paginaOrigem)
     } catch (err) {
       console.error(err)
@@ -213,8 +190,6 @@ export const EditarTransacaoPage: React.FC = () => {
       })
     } finally {
       setSaving(false)
-      setDialogSerie(false)
-      setEnvioPendente(null)
     }
   }
 
@@ -249,15 +224,9 @@ export const EditarTransacaoPage: React.FC = () => {
       cartao_id: ehEntrada ? '' : cartaoId,
       categoria_id: categoriaId,
       recorrente: canAccessRecurring && recorrente === 'sim',
+      parcelas: ehParcelado ? numParcelas : 1,
     }
-
-    // Parcela de série com outras não pagas: pergunta o escopo antes de salvar.
-    if (!ehEntrada && ehSerie) {
-      setEnvioPendente(dados)
-      setDialogSerie(true)
-      return
-    }
-    await salvar(dados, null)
+    await salvar(dados)
   }
 
   const inputCls =
@@ -402,6 +371,34 @@ export const EditarTransacaoPage: React.FC = () => {
               </select>
             </div>
 
+            {/* Parcelas — só quando há cartão; editável também na série */}
+            {ehParcelado && (
+              <div>
+                <label className={labelCls}>Parcelas</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={24}
+                  value={parcelas}
+                  onChange={(e) => setParcelas(e.target.value)}
+                  placeholder="Parcelas"
+                  className={inputCls}
+                />
+                {numParcelas > 1 && Number(valor.replace(',', '.')) > 0 && (
+                  <p className="text-[10px] text-gray-500 mt-1">
+                    {numParcelas}x de{' '}
+                    <strong className="text-[#6639A6]">
+                      {new Intl.NumberFormat('pt-BR', {
+                        style: 'currency',
+                        currency: 'BRL',
+                      }).format(Number(valor.replace(',', '.')) / numParcelas)}
+                    </strong>{' '}
+                    — um lançamento por mês, conforme a fatura.
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* Recorrente — exclusivo dos planos pagos (VIP/Premium) */}
             <div>
               <label className={labelCls}>Recorrente:</label>
@@ -458,15 +455,14 @@ export const EditarTransacaoPage: React.FC = () => {
               </p>
             )}
 
-            {/* Aviso de série */}
+            {/* Aviso de série — a edição vale para TODAS as parcelas */}
             {transacao.serie_id && (
               <p className="text-[11px] text-gray-500 bg-[#F6F3FB] rounded-xl px-3 py-2">
                 {parcelaNumero > 0 && parcelaTotal > 0
                   ? `Esta é a parcela ${parcelaNumero} de ${parcelaTotal}. `
                   : 'Esta movimentação faz parte de uma série de parcelas. '}
-                {parcelasRestantes > 0
-                  ? `Ao salvar, você escolhe se a edição vale só para esta parcela ou para as ${parcelasRestantes + 1} não pagas da série.`
-                  : 'As demais parcelas já estão pagas e não serão alteradas.'}
+                Ao salvar, a edição vale para <strong>todas as parcelas da série</strong> — mesmo as
+                já pagas. Alterar o número de parcelas recalcula a série inteira.
               </p>
             )}
 
@@ -490,49 +486,6 @@ export const EditarTransacaoPage: React.FC = () => {
           </form>
         </div>
       </main>
-
-      {/* Escolha do escopo da edição em séries de parcelas */}
-      <Dialog open={dialogSerie} onOpenChange={(aberto) => !aberto && setDialogSerie(false)}>
-        <DialogContent className="max-w-sm rounded-3xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-sm font-black">
-              <Repeat className="w-4 h-4 text-[#6639A6]" />
-              Editar série de parcelas
-            </DialogTitle>
-            <DialogDescription className="text-xs text-gray-500">
-              Esta movimentação é a parcela {parcelaNumero} de {parcelaTotal}. Onde a edição deve
-              valer?
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2">
-            <button
-              type="button"
-              disabled={saving}
-              onClick={() => envioPendente && salvar(envioPendente, 'parcela')}
-              className="w-full py-3 text-xs font-bold text-[#6639A6] rounded-2xl bg-[#F1EAF9] hover:bg-[#E3D5F5] disabled:opacity-60 transition"
-            >
-              Editar apenas esta parcela
-            </button>
-            <button
-              type="button"
-              disabled={saving}
-              onClick={() => envioPendente && salvar(envioPendente, 'serie')}
-              className="w-full py-3 text-xs font-bold text-white rounded-2xl bg-[#6639A6] hover:bg-[#522c8a] disabled:opacity-60 transition"
-            >
-              Editar todas as parcelas restantes ({parcelasRestantes + 1})
-            </button>
-          </div>
-          <DialogFooter className="sm:justify-center">
-            <button
-              type="button"
-              onClick={() => setDialogSerie(false)}
-              className="text-[11px] font-semibold text-gray-400 hover:text-gray-600"
-            >
-              Cancelar
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <BottomNav />
     </div>
