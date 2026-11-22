@@ -1,11 +1,20 @@
 /**
  * Convite de grupo por e-mail.
  *
- * Rota: POST /backend/v1/grupos/convidar  { membro_id }
- * O registro em grupos_membros já foi criado pelo front (com status pendente
- * quando o convidado ainda não tem conta). Aqui só enviamos o e-mail —
- * best-effort: falha de envio NUNCA derruba o convite.
+ * Rotas:
+ *   POST /backend/v1/grupos/convidar  { membro_id }
+ *     O registro em grupos_membros já foi criado pelo front. Se o e-mail
+ *     convidado JÁ TEM CONTA no app, o backend vincula o user_id e marca o
+ *     membro como aceito NA HORA (a pessoa entra no grupo sem criar conta).
+ *     Sem conta, segue pendente: quando a pessoa se cadastrar com esse
+ *     e-mail, o hook de cadastro vincula automaticamente.
+ *     Aqui também enviamos o e-mail — best-effort: falha de envio NUNCA
+ *     derruba o convite.
+ *   POST /backend/v1/grupos/convidar  { grupo_id, email }
+ *     Alternativa: o backend cria o registro de membro, resolve a conta
+ *     existente e envia o e-mail em um passo só.
  */
+
 routerAdd('POST', '/backend/v1/grupos/convidar', (c) => {
   try {
     const info = c.requestInfo()
@@ -19,6 +28,32 @@ routerAdd('POST', '/backend/v1/grupos/convidar', (c) => {
     const email = membro.getString('email')
     if (!email) {
       return c.json(400, { error: 'Convite sem e-mail' })
+    }
+
+    // Já tem conta com esse e-mail? Vincula ao grupo na hora — sem depender
+    // de a pessoa criar conta ou aceitar alguma coisa depois.
+    let jaVinculado = false
+    if (membro.getString('status') !== 'aceito') {
+      const alvo = String(email || '')
+        .trim()
+        .toLowerCase()
+      let usuario = null
+      if (alvo && alvo.includes('@')) {
+        try {
+          usuario = $app.findFirstRecordByFilter('users', `email = '${alvo}'`)
+        } catch (_) {
+          usuario = null
+        }
+      }
+      if (usuario) {
+        membro.set('user_id', usuario.id)
+        membro.set('nome', String(usuario.name() || membro.getString('nome')))
+        membro.set('status', 'aceito')
+        $app.save(membro)
+        jaVinculado = true
+      }
+    } else if (membro.getString('user_id') !== '') {
+      jaVinculado = true
     }
 
     // Quem convidou (dono do grupo) — para assinar o e-mail.
@@ -63,7 +98,13 @@ routerAdd('POST', '/backend/v1/grupos/convidar', (c) => {
         email,
       )
 
-    return c.json(200, { success: true, enviado_para: email })
+    return c.json(200, {
+      success: true,
+      enviado_para: email,
+      ja_tem_conta: jaTemConta,
+      vinculado: jaVinculado,
+      status: membro.getString('status'),
+    })
   } catch (err) {
     return c.json(500, { error: err.message || String(err) })
   }

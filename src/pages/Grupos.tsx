@@ -78,12 +78,19 @@ export const GruposPage: React.FC = () => {
     }
     setConvidando(grupoId)
     try {
-      await gruposService.convidar(emailConvite.trim())
+      const membro = await gruposService.convidar(emailConvite.trim())
       setEmailConvite('')
-      toast({
-        title: 'Convite enviado!',
-        description: 'A pessoa aparece na lista quando entrar/aceitar.',
-      })
+      toast(
+        membro.status === 'aceito'
+          ? {
+              title: 'Adicionada ao grupo!',
+              description: `${membro.nome || membro.email} já tem conta no Quitafy e foi vinculada ao grupo na hora.`,
+            }
+          : {
+              title: 'Convite enviado!',
+              description: 'A pessoa aparece na lista quando criar a conta com esse e-mail.',
+            },
+      )
       await load()
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Erro ao convidar'
@@ -263,6 +270,11 @@ export const GruposPage: React.FC = () => {
                         {m.status === 'pendente' && (
                           <span className="ml-2 text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">
                             Pendente
+                          </span>
+                        )}
+                        {m.status === 'aceito' && m.papel !== 'dono' && m.user_id && (
+                          <span className="ml-2 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-full">
+                            No grupo
                           </span>
                         )}
                       </p>

@@ -104,10 +104,12 @@ export const gruposService = {
   },
 
   /**
-   * Convida pelo e-mail. Se o e-mail já tem conta no app, o membro já nasce
-   * vinculado (status aceito). Sem conta, nasce pendente: quando a pessoa se
-   * cadastrar com esse e-mail, o hook do backend vincula automaticamente e
-   * envia o e-mail de convite.
+   * Convida pelo e-mail. O registro do membro nasce pendente e a resolução de
+   * quem JÁ TEM CONTA é feita no backend (a rota /grupos/convidar): o front
+   * não consegue ler outro usuário pelas regras do PocketBase. O hook vincula
+   * o user_id e marca como aceito na hora. Sem conta, o membro segue
+   * pendente: quando a pessoa se cadastrar com esse e-mail, o hook do backend
+   * vincula automaticamente e o e-mail de convite é enviado.
    */
   async convidar(email: string): Promise<MembroGrupo> {
     const uid = pb.authStore.record?.id
@@ -121,17 +123,6 @@ export const gruposService = {
     let grupo = grupos.find((g) => g.papel === 'dono')
     if (!grupo) grupo = await this.criarGrupo()
 
-    // Já existe conta com esse e-mail? vincula direto.
-    let usuarioId = ''
-    let nome = ''
-    try {
-      const u = await pb.collection('users').getFirstListItem(`email = "${alvo}"`)
-      usuarioId = u.id
-      nome = String(u.name || '')
-    } catch (_) {
-      /* sem conta ainda: convite fica pendente */
-    }
-
     // Já é membro do grupo?
     const jaExiste = await pb
       .collection('grupos_membros')
@@ -140,14 +131,13 @@ export const gruposService = {
 
     const rec = await pb.collection('grupos_membros').create({
       grupo_id: grupo.id,
-      user_id: usuarioId,
       email: alvo,
-      nome,
       papel: 'membro',
-      status: usuarioId ? 'aceito' : 'pendente',
+      status: 'pendente',
     })
 
-    // E-mail de convite (rota do backend; falha não bloqueia o vínculo).
+    // Rota do backend: resolve conta existente (vincula na hora) e envia o
+    // e-mail de convite — falha não bloqueia o vínculo.
     try {
       await pb.send('/backend/v1/grupos/convidar', {
         method: 'POST',
@@ -157,7 +147,12 @@ export const gruposService = {
       /* best-effort */
     }
 
-    return mapMembro(rec)
+    // Rebusca: o backend pode ter vinculado a conta e marcado como aceito.
+    const atual = await pb
+      .collection('grupos_membros')
+      .getOne(rec.id)
+      .catch(() => rec)
+    return mapMembro(atual)
   },
 
   /** Remove um membro do grupo (só o dono pode). */

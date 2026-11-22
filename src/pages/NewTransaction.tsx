@@ -19,6 +19,7 @@ import {
 import { Link } from 'react-router-dom'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useAuth } from '@/context/AuthContext'
+import { DivisaoGrupo, validarDivisao, type DivisaoMembro } from '@/components/DivisaoGrupo'
 
 type Modo = 'saida' | 'entrada'
 type AbaSaida = 'cartao' | 'outras'
@@ -59,6 +60,7 @@ export const NewTransactionPage: React.FC = () => {
   const [recorrente, setRecorrente] = useState<'sim' | 'nao'>('nao')
   const [saving, setSaving] = useState(false)
   const { canAccessRecurring } = useAuth()
+  const [divisao, setDivisao] = useState<DivisaoMembro[]>([])
 
   // Cadastro de nova categoria inline
   const [novaCatOpen, setNovaCatOpen] = useState(false)
@@ -96,6 +98,7 @@ export const NewTransactionPage: React.FC = () => {
     setCategoriaId('')
     setParcelas('1')
     setRecorrente('nao')
+    setDivisao([])
   }
 
   const handleCriarCategoria = async () => {
@@ -143,6 +146,11 @@ export const NewTransactionPage: React.FC = () => {
       toast({ variant: 'destructive', title: 'Selecione a categoria' })
       return
     }
+    const erroDivisao = validarDivisao(valorNum, divisao)
+    if (erroDivisao) {
+      toast({ variant: 'destructive', title: erroDivisao })
+      return
+    }
 
     setSaving(true)
     try {
@@ -152,16 +160,19 @@ export const NewTransactionPage: React.FC = () => {
       // mesmo que o valor chega do estado por algum caminho.
       const recorrenteFinal = canAccessRecurring && recorrente === 'sim'
 
-      await transacoesService.createComParcelas({
-        descricao: nome.trim(),
-        valor: valorNum,
-        tipo: modo === 'entrada' ? 'receita' : 'despesa',
-        data: dataReferencia,
-        categoriaId,
-        cartaoId: isCartao ? cartaoId : undefined,
-        parcelas: parcelasNum,
-        recorrente: recorrenteFinal,
-      })
+      await transacoesService.createComParcelas(
+        {
+          descricao: nome.trim(),
+          valor: valorNum,
+          tipo: modo === 'entrada' ? 'receita' : 'despesa',
+          data: dataReferencia,
+          categoriaId,
+          cartaoId: isCartao ? cartaoId : undefined,
+          parcelas: parcelasNum,
+          recorrente: recorrenteFinal,
+        },
+        divisao,
+      )
 
       toast({
         title:
@@ -340,6 +351,9 @@ export const NewTransactionPage: React.FC = () => {
                 ))}
               </select>
             </div>
+
+            {/* Divisão entre membros do grupo */}
+            <DivisaoGrupo valorTotal={valorNum} valor={divisao} onChange={setDivisao} />
 
             {/* Parcelas (somente aba Cartão) */}
             {modo === 'saida' && aba === 'cartao' && (

@@ -28,6 +28,8 @@ import {
 import { formatBRLPublic } from '@/lib/format'
 import type { Imovel, TipoFluxo } from '@/types/financial'
 import { FluxoDialog } from './FluxoDialog'
+import { CompartilharImovelDialog } from '@/components/CompartilharImovelDialog'
+import { Share2, Users } from 'lucide-react'
 
 const REF_MESES = [
   'Referência: 2 meses antes do vencimento',
@@ -48,6 +50,7 @@ export const ImovelDetalhe: React.FC = () => {
   const [mesBase, setMesBase] = useState('')
   const [defasagem, setDefasagem] = useState(2)
   const [savingCorrecao, setSavingCorrecao] = useState(false)
+  const [showCompartilhar, setShowCompartilhar] = useState(false)
 
   const load = React.useCallback(async () => {
     if (!id) return
@@ -134,7 +137,7 @@ export const ImovelDetalhe: React.FC = () => {
           >
             <ArrowLeft className="w-5 h-5 text-[#1F1235]" />
           </button>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <h1 className="text-lg font-bold text-[#1F1235] truncate">{imovel.nome}</h1>
             <p className="text-xs text-gray-500 truncate">
               {imovel.construtora}
@@ -142,6 +145,33 @@ export const ImovelDetalhe: React.FC = () => {
                 ` · Contrato de ${new Date(imovel.data_contrato).toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' })}`}
             </p>
           </div>
+          {/* Compartilhar — membros do grupo podem ver e editar */}
+          <button
+            onClick={() => setShowCompartilhar(true)}
+            className="p-2 rounded-full bg-white shadow-sm border border-[#ECE6F2] hover:bg-[#F6F3FB] transition shrink-0"
+            aria-label="Compartilhar imóvel"
+          >
+            <Share2 className="w-4 h-4 text-[#6639A6]" />
+          </button>
+        </div>
+
+        {/* Valor do imóvel = soma dos fluxos (nunca informado na criação) */}
+        <div className="flex items-center justify-between bg-white rounded-2xl px-4 py-3 shadow-sm border border-[#ECE6F2] mb-3">
+          <div>
+            <p className="text-[11px] font-semibold text-gray-500">Valor do imóvel (fluxos)</p>
+            <p className="text-lg font-bold text-[#1F1235]">
+              {formatBRLPublic(fluxosCalc?.totalContrato ?? 0)}
+              {fluxosCalc?.estimado && (
+                <span className="ml-1 text-[10px] font-semibold text-amber-600">(estimado)</span>
+              )}
+            </p>
+          </div>
+          {(imovel.compartilhado_com?.length ?? 0) > 0 && (
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#6639A6] bg-[#F1EAF9] rounded-full px-2.5 py-1">
+              <Users className="w-3 h-3" />
+              {imovel.compartilhado_com!.length}
+            </span>
+          )}
         </div>
 
         {/* Cartão roxo */}
@@ -210,6 +240,12 @@ export const ImovelDetalhe: React.FC = () => {
             <TrendingUp className="w-3 h-3 text-[#6639A6]" />
             Último INCC: {rotuloMes(Object.keys(indices).sort().pop() || mesBase)}
           </span>
+          {(imovel.compartilhado_com?.length ?? 0) > 0 && (
+            <span className="inline-flex items-center gap-1 text-xs bg-white border border-[#ECE6F2] rounded-full px-3 py-1 text-gray-600">
+              <Users className="w-3 h-3 text-[#6639A6]" />
+              Compartilhado com {imovel.compartilhado_com!.length}
+            </span>
+          )}
         </div>
 
         {/* Correção pelo INCC */}
@@ -287,6 +323,14 @@ export const ImovelDetalhe: React.FC = () => {
         onClose={() => setShowFluxo(false)}
         imovelId={imovel.id}
         defasagemIncc={defasagem}
+        onSaved={() => void load()}
+      />
+
+      <CompartilharImovelDialog
+        imovelId={imovel.id}
+        compartilhadoAtual={imovel.compartilhado_com || []}
+        open={showCompartilhar}
+        onOpenChange={setShowCompartilhar}
         onSaved={() => void load()}
       />
 

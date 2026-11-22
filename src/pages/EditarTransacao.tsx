@@ -9,6 +9,7 @@ import { transacoesService, mesDaFatura, descricaoBase, rotuloFatura } from '@/s
 import type { Cartao, Categoria, Transacao } from '@/types/financial'
 import { toast } from '@/hooks/use-toast'
 import { useAuth } from '@/context/AuthContext'
+import { DivisaoGrupo, validarDivisao, type DivisaoMembro } from '@/components/DivisaoGrupo'
 import { ArrowLeft, CreditCard, TrendingUp } from 'lucide-react'
 
 type DadosEdicao = {
@@ -56,6 +57,7 @@ export const EditarTransacaoPage: React.FC = () => {
   const [parcelas, setParcelas] = useState('1')
   const [recorrente, setRecorrente] = useState<'sim' | 'nao'>('nao')
   const { canAccessRecurring } = useAuth()
+  const [divisao, setDivisao] = useState<DivisaoMembro[]>([])
 
   // Série: posição da parcela e tamanho atual da série (só para o aviso).
   const [parcelaNumero, setParcelaNumero] = useState(0)
@@ -87,6 +89,9 @@ export const EditarTransacaoPage: React.FC = () => {
         setRecorrente(t.recorrente ? 'sim' : 'nao')
         setParcelaNumero(t.parcela_numero ?? 0)
         setParcelaTotal(t.parcela_total ?? 0)
+        // Divisão já gravada (a da parcela serve para a série inteira).
+        const divs = await transacoesService.listarDivisoes(t.id).catch(() => [])
+        setDivisao(divs.map((d) => ({ user_id: d.user_id, valor: Number(d.valor) })))
       } catch (err) {
         console.error(err)
         setNotFound(true)
@@ -137,21 +142,27 @@ export const EditarTransacaoPage: React.FC = () => {
           categoria_id: dados.categoria_id,
           recorrente: dados.recorrente,
         })
+        // Divisão do lançamento (a série não se aplica a entrada).
+        await transacoesService.aplicarDivisao(transacao, divisao)
       } else if (transacao.serie_id || dados.parcelas > 1) {
         // Série: APAGAR-AND-RECRIAR, sem exceção e sem perguntar escopo —
         // TODAS as parcelas existentes (mesmo as já pagas) são excluídas do
         // banco e a série volta do zero com o novo valor, a nova data de
         // início, o novo número de parcelas, cartão, nome, categoria e
         // recorrente. Com 1 parcela, a série some e vira lançamento único.
-        await transacoesService.recriarSerie(transacao, {
-          descricao: dados.descricao,
-          valor: dados.valor,
-          data: dados.data,
-          cartao_id: dados.cartao_id,
-          categoria_id: dados.categoria_id,
-          recorrente: dados.recorrente,
-          parcelas: dados.parcelas,
-        })
+        await transacoesService.recriarSerie(
+          transacao,
+          {
+            descricao: dados.descricao,
+            valor: dados.valor,
+            data: dados.data,
+            cartao_id: dados.cartao_id,
+            categoria_id: dados.categoria_id,
+            recorrente: dados.recorrente,
+            parcelas: dados.parcelas,
+          },
+          divisao,
+        )
       } else {
         // Lançamento único: update() sobre o registro, sem tocar na série de
         // ninguém (não há série).
@@ -164,6 +175,8 @@ export const EditarTransacaoPage: React.FC = () => {
           categoria_id: dados.categoria_id,
           recorrente: dados.recorrente,
         })
+        // Divisão do lançamento único (gravada ou limpa).
+        await transacoesService.aplicarDivisao(transacao, divisao)
       }
 
       toast({ title: 'Movimentação atualizada!' })
@@ -201,6 +214,11 @@ export const EditarTransacaoPage: React.FC = () => {
     }
     if (!categoriaId) {
       toast({ variant: 'destructive', title: 'Selecione a categoria' })
+      return
+    }
+    const erroDivisao = validarDivisao(valorNum, divisao)
+    if (erroDivisao) {
+      toast({ variant: 'destructive', title: erroDivisao })
       return
     }
 
@@ -385,6 +403,13 @@ export const EditarTransacaoPage: React.FC = () => {
                 )}
               </div>
             )}
+
+            {/* Divisão entre membros do grupo */}
+            <DivisaoGrupo
+              valorTotal={Number(valor.replace(',', '.')) || 0}
+              valor={divisao}
+              onChange={setDivisao}
+            />
 
             {/* Recorrente — exclusivo dos planos pagos (VIP/Premium) */}
             <div>
