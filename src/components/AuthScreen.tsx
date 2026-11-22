@@ -256,7 +256,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
 
       {/* Rodapé institucional */}
       <footer className="text-center text-xs text-white/50 z-10 pb-2">
-        Finanzze © {new Date().getFullYear()} • Identidade roxa original preservada
+        Finanzze © {new Date().getFullYear()}
       </footer>
     </div>
   )
