@@ -1,7 +1,7 @@
-/* Service worker do Finanzze: cache offline do shell e dos assets.
+/* Service worker do Quitafy: cache offline do shell e dos assets.
  * Nova versão: instala e assume o controle imediatamente; a página recarrega
  * (ver src/lib/pwa.ts), então o usuário recebe a versão publicada. */
-const CACHE = 'finanzze-cache-v1'
+const CACHE = 'quitafy-cache-v1'
 const SHELL = ['/']
 
 self.addEventListener('install', (event) => {

@@ -7,7 +7,7 @@ interface LogoLoaderProps {
   className?: string
 }
 
-/* Loading do site: o logo do Finanzze pulsando no lugar do spinner */
+/* Loading do site: o logo do Quitafy pulsando no lugar do spinner */
 export const LogoLoader: React.FC<LogoLoaderProps> = ({ size = 56, className = '' }) => (
   <div
     className={`flex items-center justify-center ${className}`}

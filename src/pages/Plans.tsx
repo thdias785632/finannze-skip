@@ -67,7 +67,7 @@ export const PlansPage: React.FC = () => {
         { title: 'Correção pelo INCC oficial do Banco Central (SGS 192)', included: true },
         { title: 'Cálculo de defasagem e mês-base contratual', included: true },
         { title: 'Comparativo de valor original vs valor corrigido', included: true },
-        { title: 'Prioridade em novos recursos do Finanzze', included: true },
+        { title: 'Prioridade em novos recursos do Quitafy', included: true },
       ],
     },
   ]
@@ -84,7 +84,7 @@ export const PlansPage: React.FC = () => {
           </div>
           <h1 className="text-xl font-black text-[#1F1438]">Comparativo de Planos</h1>
           <p className="text-xs text-gray-500 max-w-xs mx-auto">
-            Veja o que cada perfil libera no Finanzze e escolha o plano ideal para suas metas
+            Veja o que cada perfil libera no Quitafy e escolha o plano ideal para suas metas
           </p>
         </div>
 

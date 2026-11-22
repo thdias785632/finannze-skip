@@ -1,5 +1,5 @@
 /**
- * Exportação do Extrato em PDF (cliente, jsPDF + jspdf-autotable).
+ * Exportação do Extrato em PDF (cliente, jsPDF).
  *
  * O PDF espelha o que a tela /extrato mostra para o mês navegado:
  * cabeçalho com logo, mês/ano de referência, card de Entradas (linhas +
@@ -8,7 +8,6 @@
  * categoria (incluindo "Economia" quando positiva).
  */
 import { jsPDF } from 'jspdf'
-import autoTable from 'jspdf-autotable'
 import type { Transacao } from '@/types/financial'
 import { formatBRLPublic } from '@/lib/format'
 import appIcon from '@/assets/logo-192-8a6a4.png'
@@ -38,6 +37,13 @@ export interface ExtractPdfData {
 const PAGE_MARGIN = 14
 const CONTENT_WIDTH = 210 - PAGE_MARGIN * 2
 
+/**
+ * Sinal de valor que o jsPDF desenha sem substituir o glifo: o hífen-minus
+ * (U+002D) existe na fonte Helvetica padrão; o "−" (U+2212) não existe e vira
+ * um caractere estranho no PDF gerado — por isso aqui é sempre '-'.
+ */
+const SINAL_PDF = '-'
+
 const loadLogo = (src: string): Promise<HTMLImageElement> =>
   new Promise((resolve, reject) => {
     const img = new Image()
@@ -64,6 +70,26 @@ function tituloSecao(doc: jsPDF, texto: string, y: number): number {
 }
 
 /**
+ * Valor monetário alinhado à direita na borda do conteúdo, em UMA chamada
+ * doc.text (sinal + valor juntos, sem quebra de linha) e reservando um limite
+ * de largura para o texto da descrição nunca encostar nele.
+ */
+function desenharValor(
+  doc: jsPDF,
+  valor: number,
+  y: number,
+  cor: [number, number, number],
+  sinal: '+' | '-' | null,
+  bold = false,
+): void {
+  const texto = `${sinal ? `${sinal} ` : ''}${formatBRLPublic(valor)}`
+  doc.setFont('helvetica', bold ? 'bold' : 'normal')
+  doc.setFontSize(10)
+  doc.setTextColor(...cor)
+  doc.text(texto, PAGE_MARGIN + CONTENT_WIDTH, y, { align: 'right', maxWidth: 60 })
+}
+
+/**
  * Lista de lançamentos + total, fiel ao card da tela: cada linha nome à
  * esquerda, sinal + valor à direita, total destacado no fim.
  */
@@ -72,7 +98,7 @@ function secaoLancamentos(
   titulo: string,
   itens: { descricao: string; valor: number }[],
   total: number,
-  sinal: '+' | '−',
+  negativo: boolean,
   yInicial: number,
 ): number {
   let y = tituloSecao(doc, titulo, yInicial)
@@ -89,11 +115,8 @@ function secaoLancamentos(
     doc.setFontSize(10)
     for (const item of itens) {
       doc.setTextColor(...TEXT_DARK)
-      doc.text(String(item.descricao), PAGE_MARGIN, y, { maxWidth: CONTENT_WIDTH - 60 })
-      doc.setTextColor(...(sinal === '+' ? GREEN : RED))
-      doc.text(`${sinal} ${formatBRLPublic(item.valor)}`, PAGE_MARGIN + CONTENT_WIDTH, y, {
-        align: 'right',
-      })
+      doc.text(String(item.descricao), PAGE_MARGIN, y, { maxWidth: CONTENT_WIDTH - 70 })
+      desenharValor(doc, item.valor, y, negativo ? RED : GREEN, negativo ? SINAL_PDF : '+')
       y += 7
       if (y > 275) {
         doc.addPage()
@@ -107,16 +130,13 @@ function secaoLancamentos(
   doc.setFontSize(9)
   doc.setTextColor(...TEXT_MUTED)
   doc.text('Total', PAGE_MARGIN, y)
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(10)
-  doc.setTextColor(...BLUE)
-  doc.text(formatBRLPublic(total), PAGE_MARGIN + CONTENT_WIDTH, y, { align: 'right' })
+  desenharValor(doc, total, y, BLUE, null, true)
   return y + 12
 }
 
 /**
  * Gera o PDF do extrato e dispara o download (desktop) / abertura no
- * visualizador (mobile). Nome do arquivo: finanzze-extrato-YYYY-MM.pdf.
+ * visualizador (mobile). Nome do arquivo: quitafy-extrato-YYYY-MM.pdf.
  */
 export async function exportarExtratoPdf(dados: ExtractPdfData, mesIso: string): Promise<void> {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' })
@@ -127,18 +147,28 @@ export async function exportarExtratoPdf(dados: ExtractPdfData, mesIso: string):
   doc.setFillColor(...PRIMARY)
   doc.rect(0, 0, pageWidth, 26, 'F')
 
-  // Logo centralizado no cabeçalho (se carregar, segue sem ele)
+  // Logo + "QUITAFY" como um bloco único centrado (gap de 2.5mm entre eles),
+  // mesmo visual do header do app — sem espaço grande demais no meio.
   try {
     const img = await loadLogo(appIcon)
-    const lado = 14
-    doc.addImage(img, 'PNG', centerX - lado / 2, 6, lado, lado)
+    const lado = 9
+    const gap = 2.5
+    const texto = 'QUITAFY'
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(15)
+    const larguraTexto = doc.getTextWidth(texto)
+    const larguraBloco = lado + gap + larguraTexto
+    const inicioBloco = centerX - larguraBloco / 2
+    doc.addImage(img, 'PNG', inicioBloco, (26 - lado) / 2, lado, lado)
+    doc.setTextColor(255, 255, 255)
+    doc.text(texto, inicioBloco + lado + gap, 16.5, { baseline: 'middle' })
   } catch {
-    /* logo é opcional */
+    // Sem logo, texto centrado puro (fallback idêntico ao header do app)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(15)
+    doc.setTextColor(255, 255, 255)
+    doc.text('QUITAFY', centerX, 16.5, { align: 'center', baseline: 'middle' })
   }
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(15)
-  doc.setTextColor(255, 255, 255)
-  doc.text('FINANZZE', centerX, 24, { align: 'center' })
 
   // ---- Mês de referência ----
   let y = 36
@@ -153,7 +183,7 @@ export async function exportarExtratoPdf(dados: ExtractPdfData, mesIso: string):
     'Entradas do mês',
     dados.receitas.map((t) => ({ descricao: t.descricao, valor: t.valor })),
     dados.totalReceitas,
-    '+',
+    false,
     y,
   )
 
@@ -172,7 +202,7 @@ export async function exportarExtratoPdf(dados: ExtractPdfData, mesIso: string):
         ]
       : []),
   ]
-  y = secaoLancamentos(doc, 'Saídas do mês', saidas, dados.totalDespesas, '−', y)
+  y = secaoLancamentos(doc, 'Saídas do mês', saidas, dados.totalDespesas, true, y)
 
   // ---- Restante / Economia ----
   const positivo = dados.economia > 0
@@ -185,13 +215,15 @@ export async function exportarExtratoPdf(dados: ExtractPdfData, mesIso: string):
   doc.text(
     neutro ? 'Restante/Economia' : positivo ? 'Economia' : 'Restante',
     PAGE_MARGIN + 4,
-    y + 5,
+    y + 8,
   )
-  doc.text(
-    `${dados.economia < 0 ? '− ' : dados.economia > 0 ? '+ ' : ''}${formatBRLPublic(Math.abs(dados.economia))}`,
-    PAGE_MARGIN + CONTENT_WIDTH - 4,
-    y + 5,
-    { align: 'right' },
+  desenharValor(
+    doc,
+    Math.abs(dados.economia),
+    y + 8,
+    [255, 255, 255],
+    dados.economia === 0 ? null : dados.economia > 0 ? '+' : SINAL_PDF,
+    true,
   )
   y += 18
 
@@ -209,6 +241,7 @@ export async function exportarExtratoPdf(dados: ExtractPdfData, mesIso: string):
       doc.setTextColor(...TEXT_MUTED)
       doc.text(`${formatBRLPublic(c.value)}  ·  ${pct}%`, PAGE_MARGIN + CONTENT_WIDTH, y, {
         align: 'right',
+        maxWidth: 60,
       })
       y += 6
       if (y > 275) {
@@ -228,8 +261,8 @@ export async function exportarExtratoPdf(dados: ExtractPdfData, mesIso: string):
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(8)
   doc.setTextColor(156, 163, 175)
-  doc.text(`Gerado em ${geradoEm} pelo Finanzze`, centerX, 289, { align: 'center' })
+  doc.text(`Gerado em ${geradoEm} pelo Quitafy`, centerX, 289, { align: 'center' })
 
-  const nomeArquivo = `finanzze-extrato-${mesIso}.pdf`
+  const nomeArquivo = `quitafy-extrato-${mesIso}.pdf`
   doc.save(nomeArquivo)
 }

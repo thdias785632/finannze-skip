@@ -13,7 +13,7 @@ export default function Index() {
         <div className="flex flex-col items-center gap-3">
           <LogoLoader size={64} />
           <p className="text-white/70 text-xs font-semibold tracking-wider uppercase">
-            Carregando Finanzze...
+            Carregando Quitafy...
           </p>
         </div>
       </div>

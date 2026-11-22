@@ -12,8 +12,8 @@ function instalarManifesto() {
   const origem = window.location.origin
   const icone = new URL(appIcon, origem).href
   const manifesto = {
-    name: 'Finanzze',
-    short_name: 'Finanzze',
+    name: 'Quitafy',
+    short_name: 'Quitafy',
     description: 'Controle de finanças pessoais',
     lang: 'pt-BR',
     start_url: `${origem}/`,

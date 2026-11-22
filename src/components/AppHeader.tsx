@@ -8,7 +8,7 @@ interface AppHeaderProps {
   title?: string
 }
 
-export const AppHeader: React.FC<AppHeaderProps> = ({ title = 'Finanzze' }) => {
+export const AppHeader: React.FC<AppHeaderProps> = ({ title = 'Quitafy' }) => {
   const { user, plan, logout } = useAuth()
 
   const planBadgeClasses = {
@@ -25,7 +25,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ title = 'Finanzze' }) => {
           <Link to="/" className="flex items-center gap-2 focus:outline-none">
             <img src={appIcon} alt="" width={28} height={28} className="w-7 h-7 rounded-lg" />
             <span className="text-xl font-black tracking-wider uppercase text-white drop-shadow-xs">
-              FINANZZE
+              QUITAFY
             </span>
           </Link>
           <Link

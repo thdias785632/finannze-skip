@@ -52,13 +52,13 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
         await login(email, password)
         toast({
           title: 'Bem-vindo de volta!',
-          description: 'Acesso realizado com sucesso ao Finanzze.',
+          description: 'Acesso realizado com sucesso ao Quitafy.',
         })
       } else {
         await signup(name, email, password)
         toast({
           title: 'Conta criada com sucesso!',
-          description: 'Sua jornada no Finanzze começou.',
+          description: 'Sua jornada no Quitafy começou.',
         })
       }
       onSuccess?.()
@@ -95,7 +95,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
           Finanças Pessoais & Imóveis na Planta
         </div>
         <h1 className="text-3xl sm:text-4xl font-black tracking-widest text-white uppercase drop-shadow-md">
-          FINANZZE
+          QUITAFY
         </h1>
         <p className="mt-1 text-xs sm:text-sm text-white/70 max-w-xs font-normal">
           Controle financeiro inteligente, extrato mês a mês e correção de imóveis pelo INCC
@@ -152,7 +152,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
 
           <div className="text-center mb-5">
             <h2 className="text-xl font-bold tracking-tight text-[#1F1438]">
-              {mode === 'login' ? 'Bem-vindo de volta' : 'Crie sua conta no Finanzze'}
+              {mode === 'login' ? 'Bem-vindo de volta' : 'Crie sua conta no Quitafy'}
             </h2>
             <p className="text-xs text-[#6B7280] mt-1">
               {mode === 'login'
@@ -229,7 +229,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
                 <span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               ) : mode === 'login' ? (
                 <>
-                  Entrar no Finanzze
+                  Entrar no Quitafy
                   <LogIn className="w-4 h-4" />
                 </>
               ) : (
@@ -256,7 +256,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
 
       {/* Rodapé institucional */}
       <footer className="text-center text-xs text-white/50 z-10 pb-2">
-        Finanzze © {new Date().getFullYear()}
+        Quitafy © {new Date().getFullYear()}
       </footer>
     </div>
   )
