@@ -362,7 +362,7 @@ export const ExtractPage: React.FC = () => {
               >
                 <h2>{monthLabel}</h2>
                 <p>
-                  {economia < 0 ? '− ' : '+ '}
+                  {economia !== 0 && (economia < 0 ? '− ' : '+ ')}
                   {formatBRLPublic(Math.abs(economia))}
                 </p>
               </div>
