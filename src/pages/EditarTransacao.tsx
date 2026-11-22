@@ -25,10 +25,10 @@ type DadosEdicao = {
  * (sem cartão) ou entrada. Abre o formulário já preenchido com os dados
  * atuais e salva com update() sobre o registro (nunca cria outro lançamento).
  *
- * Quando a movimentação pertence a uma série de parcelas, a edição vale para
- * a série INTEIRA (todas as parcelas, pagas ou não), SEM dialog de escopo.
- * O número de parcelas também pode ser alterado: a série é recalculada
- * (cria/remove/renumera as parcelas) pelo recalcularParcelas() do serviço.
+ * Quando a movimentação pertence a uma série de parcelas, salvar é APAGAR-
+ * AND-RECRIAR: todas as parcelas da série (pagas ou não) são excluídas do
+ * banco e a série volta do zero com o que está no formulário — novo valor,
+ * nova data de início e novo número de parcelas, via recriarSerie().
  */
 export const EditarTransacaoPage: React.FC = () => {
   const { id } = useParams<{ id: string }>()
@@ -56,7 +56,7 @@ export const EditarTransacaoPage: React.FC = () => {
   const [recorrente, setRecorrente] = useState<'sim' | 'nao'>('nao')
   const { canAccessRecurring } = useAuth()
 
-  // Série: posição da parcela e tamanho atual da série.
+  // Série: posição da parcela e tamanho atual da série (só para o aviso).
   const [parcelaNumero, setParcelaNumero] = useState(0)
   const [parcelaTotal, setParcelaTotal] = useState(0)
 
@@ -136,35 +136,21 @@ export const EditarTransacaoPage: React.FC = () => {
           categoria_id: dados.categoria_id,
           recorrente: dados.recorrente,
         })
-      } else if (transacao.serie_id) {
-        // Série: a edição vale para a série INTEIRA, sem exceção e sem
-        // perguntar escopo. Com parcelas alteradas, recalcula a série
-        // (cria/remove/renumera; cada parcela mantém seu mês de fatura).
-        if (dados.parcelas !== parcelaTotal) {
-          await transacoesService.recalcularParcelas(
-            transacao.serie_id,
-            transacao,
-            cartoes,
-            dados.parcelas,
-            {
-              descricao: dados.descricao,
-              valor: dados.valor,
-              data: dados.data,
-              cartao_id: dados.cartao_id,
-              categoria_id: dados.categoria_id,
-              recorrente: dados.recorrente,
-            },
-          )
-        } else {
-          await transacoesService.updateSerie(transacao.serie_id, transacao, cartoes, {
-            descricao: dados.descricao,
-            valor: dados.valor,
-            data: dados.data,
-            cartao_id: dados.cartao_id,
-            categoria_id: dados.categoria_id,
-            recorrente: dados.recorrente,
-          })
-        }
+      } else if (transacao.serie_id || dados.parcelas > 1) {
+        // Série: APAGAR-AND-RECRIAR, sem exceção e sem perguntar escopo —
+        // TODAS as parcelas existentes (mesmo as já pagas) são excluídas do
+        // banco e a série volta do zero com o novo valor, a nova data de
+        // início, o novo número de parcelas, cartão, nome, categoria e
+        // recorrente. Com 1 parcela, a série some e vira lançamento único.
+        await transacoesService.recriarSerie(transacao, {
+          descricao: dados.descricao,
+          valor: dados.valor,
+          data: dados.data,
+          cartao_id: dados.cartao_id,
+          categoria_id: dados.categoria_id,
+          recorrente: dados.recorrente,
+          parcelas: dados.parcelas,
+        })
       } else {
         // Lançamento único: update() sobre o registro, sem tocar na série de
         // ninguém (não há série).
@@ -455,14 +441,15 @@ export const EditarTransacaoPage: React.FC = () => {
               </p>
             )}
 
-            {/* Aviso de série — a edição vale para TODAS as parcelas */}
+            {/* Aviso de série — apagar-e-recriar */}
             {transacao.serie_id && (
               <p className="text-[11px] text-gray-500 bg-[#F6F3FB] rounded-xl px-3 py-2">
                 {parcelaNumero > 0 && parcelaTotal > 0
                   ? `Esta é a parcela ${parcelaNumero} de ${parcelaTotal}. `
                   : 'Esta movimentação faz parte de uma série de parcelas. '}
-                Ao salvar, a edição vale para <strong>todas as parcelas da série</strong> — mesmo as
-                já pagas. Alterar o número de parcelas recalcula a série inteira.
+                Ao salvar, <strong>todas as parcelas da série são apagadas e recriadas</strong>{' '}
+                (mesmo as já pagas), com o valor, a data de início e o número de parcelas deste
+                formulário.
               </p>
             )}
 

@@ -144,225 +144,76 @@ export const transacoesService = {
   },
 
   /**
-   * Edição de série: aplica a edição a TODAS as parcelas da série (mesmo
-   * serie_id), SEM filtrar por pagas — a edição vale para a série inteira.
+   * Edição de série por APAGAR-AND-RECRIAR: TODAS as transações da série são
+   * EXCLUÍDAS do banco (inclusive as já pagas — sem tratamento especial) e a
+   * série é recriada do zero a partir dos dados do formulário: novo valor
+   * total (dividido pelo novo número de parcelas), nova data (que é o início
+   * da parcela 1), novo número de parcelas, cartão, nome, categoria e
+   * recorrente. Cada parcela recriada segue a regra da fatura já usada na
+   * criação (mesDaFatura: gasto no dia do vencimento ou depois cai na fatura
+   * do mês seguinte), com descrição "Nome (k/n)" e os campos
+   * serie_id/parcela_numero/parcela_total gravados.
    *
-   * O novo valor vale por igual; a data de cada parcela acompanha o mesmo
-   * deslocamento de faturas (regra mesDaFatura) que ela tinha em relação à
-   * parcela editada — cada parcela mantém o SEU mês de fatura, só movendo
-   * junto. O nome novo vale para todas (mantido o sufixo "(k/n)" de cada
-   * uma), assim como categoria, cartão e recorrente. Pagas ou não pagas:
-   * todas recebem a edição, sem exceção.
+   * Com 1 parcela (ou sem parcelas), a série some: vira um lançamento único,
+   * sem sufixo "(k/n)" e sem serie_id. Um lançamento único que passa a ter
+   * parcelas ganha sua própria série nova.
    */
-  async updateSerie(
-    serieId: string,
+  async recriarSerie(
     alvo: Transacao,
-    cartoes: Cartao[],
-    data: {
-      descricao?: string
-      valor?: number
-      data?: string // YYYY-MM-DD — só quando o campo data foi alterado
-      cartao_id?: string | null
-      categoria_id?: string | null
-      recorrente?: boolean
-    },
-  ): Promise<number> {
-    // TODAS as parcelas da série, sem exceção — inclusive as já pagas e a
-    // própria parcela editada (aplicada por último, com o mesmo patch).
-    const parcelas = await this.listBySerie(serieId)
-
-    // Deslocamento em meses de cada parcela em relação à editada, medido pela
-    // REGRA DA FATURA (mesDaFatura): é o mês da fatura que cada parcela
-    // ocupa, e ele é o que se preserva ao mover a série inteira.
-    const mesAlvo = mesDaFatura(alvo, cartoes)
-    const offsetDe = (t: Transacao): number => {
-      const [anoA, mesA] = mesAlvo.split('-').map(Number)
-      const [anoT, mesT] = mesDaFatura(t, cartoes).split('-').map(Number)
-      return (anoT - anoA) * 12 + (mesT - mesA)
-    }
-
-    const baseNome = descricaoBase(data.descricao ?? alvo.descricao)
-
-    let atualizados = 0
-    for (const parcela of parcelas) {
-      const off = offsetDe(parcela)
-      // Nova data de competência: mesmo dia do mês escolhido, deslocado pelos
-      // meses que a parcela já se afastava da editada. Dia 29/30/31 cai no
-      // último dia do mês quando ele não existe.
-      let novaData = ''
-      if (data.data) {
-        const [ano, mes, diaStr] = data.data.split('-').map(Number)
-        const d = new Date(ano, mes - 1 + off, 1)
-        const ultimoDia = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
-        const dia = Math.min(diaStr || 1, ultimoDia)
-        novaData = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(dia).padStart(2, '0')}`
-      }
-
-      // Sufixo "(k/n)": a base do nome é trocada; o número de cada parcela é
-      // preservado (renumerar aqui não muda nada — a renumeração só ocorre em
-      // recalcularParcelas, quando o TOTAL de parcelas é alterado).
-      const rotulo =
-        data.descricao !== undefined
-          ? (parcela.parcela_numero ?? 0) > 0 && (parcela.parcela_total ?? 0) > 1
-            ? `${baseNome} (${parcela.parcela_numero}/${parcela.parcela_total})`
-            : baseNome
-          : undefined
-
-      const patch: Record<string, any> = {}
-      if (rotulo !== undefined) patch.descricao = rotulo
-      if (data.valor !== undefined) patch.valor = data.valor
-      if (data.data !== undefined) patch.data = `${novaData} 12:00:00.000Z`
-      if (data.cartao_id !== undefined) patch.cartao_id = data.cartao_id || null
-      if (data.categoria_id !== undefined) patch.categoria_id = data.categoria_id || null
-      if (data.recorrente !== undefined) patch.recorrente = Boolean(data.recorrente)
-
-      if (parcela.id === alvo.id) {
-        // A própria parcela editada: o update() do serviço sobrescreve os
-        // mesmos campos (e limpa os que vieram vazios).
-        await this.update(alvo.id, {
-          descricao: (patch.descricao as string) ?? alvo.descricao,
-          valor: (patch.valor as number) ?? alvo.valor,
-          tipo: alvo.tipo,
-          data: data.data ?? String(alvo.data).slice(0, 10),
-          cartao_id: (patch.cartao_id as string | null) ?? alvo.cartao_id ?? null,
-          categoria_id: (patch.categoria_id as string | null) ?? alvo.categoria_id ?? null,
-          recorrente: (patch.recorrente as boolean) ?? alvo.recorrente,
-        })
-      } else {
-        await pb.collection('transacoes').update(parcela.id, patch, {
-          expand: 'cartao_id,categoria_id',
-        })
-      }
-      atualizados++
-    }
-    return atualizados
-  },
-
-  /**
-   * Recalcula o número de parcelas de uma série existente: reduz (remove as
-   * que sobram) ou amplia (cria as que faltam), renomeando TODAS para "(k/n)"
-   * na base do nome informada. Cada parcela guarda o mês de fatura que
-   * ocupava (offset medido pela regra mesDaFatura), e as novas entram nos
-   * meses seguintes à última — o mês da fatura segue a regra do vencimento do
-   * cartão (gasto no dia do vencimento ou depois cai no mês seguinte).
-   */
-  async recalcularParcelas(
-    serieId: string,
-    alvo: Transacao,
-    cartoes: Cartao[],
-    novoTotal: number,
     dados: {
-      descricao: string // nome base já SEM o sufixo "(k/n)"
+      descricao: string
       valor: number
       data: string // YYYY-MM-DD da parcela 1
       cartao_id?: string | null
       categoria_id?: string | null
       recorrente?: boolean
+      parcelas: number
     },
-  ): Promise<void> {
-    const serie = await this.listBySerie(serieId)
-    const total = Math.max(1, Math.min(24, novoTotal))
+  ): Promise<number> {
     const userId = pb.authStore.record?.id
     if (!userId) throw new Error('Usuário não autenticado')
 
-    // Mês de fatura da parcela editada, para preservar o deslocamento
-    // (em meses de FATURA) das demais em relação a ela.
-    const mesAlvo = mesDaFatura(alvo, cartoes)
-    const offsetDe = (t: Transacao): number => {
-      const [anoA, mesA] = mesAlvo.split('-').map(Number)
-      const [anoT, mesT] = mesDaFatura(t, cartoes).split('-').map(Number)
-      return (anoT - anoA) * 12 + (mesT - mesA)
+    // 1) Exclui TODAS as transações da série — sem exceção, pagas ou não (a
+    //    própria parcela editada inclusa). Alvo sem série: exclui só ele.
+    const serie = alvo.serie_id ? await this.listBySerie(alvo.serie_id) : []
+    const ids = new Set<string>(serie.map((p) => p.id))
+    ids.add(alvo.id)
+    for (const idExcluir of ids) {
+      await pb.collection('transacoes').delete(idExcluir)
     }
 
-    // Ordena a série por parcela_numero (com fallback pela data, para séries
-    // antigas sem numeração limpa).
-    const ordenadas = [...serie].sort((a, b) => {
-      const na = a.parcela_numero ?? 1
-      const nb = b.parcela_numero ?? 1
-      if (na !== nb) return na - nb
-      return a.data < b.data ? -1 : 1
-    })
+    // 2) Recria do zero: uma parcela por mês a partir da data informada (dia
+    //    29/30/31 cai no último dia do mês quando ele não existe). O mês da
+    //    FATURA de cada uma sai da regra do vencimento (mesDaFatura).
+    const n = Math.max(1, Math.min(24, dados.parcelas || 1))
+    const [ano, mes, diaStr] = dados.data.slice(0, 10).split('-').map(Number)
+    const novaSerieId =
+      n > 1
+        ? alvo.serie_id ||
+          `serie:${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
+        : ''
 
-    // a) Remove as que sobram (além do novo total), as mais distantes primeiro.
-    const excedentes = ordenadas.slice(total)
-    for (const ex of excedentes) {
-      if (ex.id === alvo.id) continue
-      await pb.collection('transacoes').delete(ex.id)
-    }
-
-    // b) Atualiza as que ficam, renumerando 1..n e recalculando a data pela
-    //    regra da fatura, mantendo o mês de fatura que cada uma já ocupava.
-    const restantes = ordenadas.slice(0, total)
-    for (let i = 0; i < restantes.length; i++) {
-      const p = restantes[i]
-      const k = i + 1 // nova posição na série
-      const off = p.id === alvo.id ? 0 : offsetDe(p)
-      const [ano, mes, diaStr] = dados.data.split('-').map(Number)
-      const d = new Date(ano, mes - 1 + off, 1)
+    for (let k = 1; k <= n; k++) {
+      const d = new Date(ano, mes - 1 + (k - 1), 1)
       const ultimoDia = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
       const dia = Math.min(diaStr || 1, ultimoDia)
-      const novaData = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(dia).padStart(2, '0')}`
+      const dataParcela = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(dia).padStart(2, '0')}`
 
-      const rotulo = total > 1 ? `${dados.descricao} (${k}/${total})` : dados.descricao
-      const patch: Record<string, any> = {
-        descricao: rotulo,
-        valor: dados.valor / total,
-        data: `${novaData} 12:00:00.000Z`,
-        parcela_numero: total > 1 ? k : 0,
-        parcela_total: total,
-        serie_id: total > 1 ? serieId : '',
-      }
-      if (dados.cartao_id !== undefined) patch.cartao_id = dados.cartao_id || null
-      if (dados.categoria_id !== undefined) patch.categoria_id = dados.categoria_id || null
-      if (dados.recorrente !== undefined) patch.recorrente = Boolean(dados.recorrente)
-
-      if (p.id === alvo.id) {
-        await this.update(p.id, {
-          descricao: rotulo,
-          valor: patch.valor as number,
-          tipo: 'despesa',
-          data: novaData,
-          cartao_id: (patch.cartao_id as string | null) ?? null,
-          categoria_id: (patch.categoria_id as string | null) ?? null,
-          recorrente: patch.recorrente as boolean,
-        })
-        // O update() acima não toca em serie_id/parcela_* — grava direto:
-        await pb.collection('transacoes').update(p.id, {
-          parcela_numero: patch.parcela_numero,
-          parcela_total: patch.parcela_total,
-          serie_id: patch.serie_id,
-        })
-      } else {
-        await pb.collection('transacoes').update(p.id, patch)
-      }
+      await this.create({
+        descricao: n > 1 ? `${dados.descricao} (${k}/${n})` : dados.descricao,
+        valor: dados.valor / n,
+        tipo: 'despesa',
+        data: dataParcela,
+        cartao_id: dados.cartao_id || undefined,
+        categoria_id: dados.categoria_id || undefined,
+        recorrente: dados.recorrente,
+        pago: false,
+        serie_id: novaSerieId,
+        parcela_numero: n > 1 ? k : undefined,
+        parcela_total: n > 1 ? n : undefined,
+      })
     }
-
-    // c) Cria as que faltam quando a série cresceu, entrando nos meses
-    //    seguintes à última parcela que ficou (regra da fatura: a data de
-    //    competência avança um mês por parcela, o mês da FATURA sai do
-    //    vencimento do cartão via mesDaFatura).
-    if (restantes.length < total) {
-      const [ano, mes, diaStr] = dados.data.split('-').map(Number)
-      for (let k = restantes.length + 1; k <= total; k++) {
-        const d = new Date(ano, mes - 1 + (k - 1), 1)
-        const ultimoDia = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
-        const dia = Math.min(diaStr || 1, ultimoDia)
-        const dataParcela = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(dia).padStart(2, '0')}`
-        await this.create({
-          descricao: total > 1 ? `${dados.descricao} (${k}/${total})` : dados.descricao,
-          valor: dados.valor / total,
-          tipo: 'despesa',
-          data: dataParcela,
-          cartao_id: dados.cartao_id || undefined,
-          categoria_id: dados.categoria_id || undefined,
-          recorrente: dados.recorrente,
-          pago: true,
-          serie_id: serieId,
-          parcela_numero: k,
-          parcela_total: total,
-        })
-      }
-    }
+    return n
   },
 
   /**
