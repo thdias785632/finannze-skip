@@ -147,27 +147,28 @@ export async function exportarExtratoPdf(dados: ExtractPdfData, mesIso: string):
   doc.setFillColor(...PRIMARY)
   doc.rect(0, 0, pageWidth, 26, 'F')
 
-  // Logo + "QUITAFY" como um bloco único centrado (gap de 2.5mm entre eles),
+  // Logo + "Quitafy" como um bloco único centrado (gap de 2.5mm entre eles),
   // mesmo visual do header do app — sem espaço grande demais no meio.
   try {
     const img = await loadLogo(appIcon)
     const lado = 9
     const gap = 2.5
-    const texto = 'QUITAFY'
+    const texto = 'Quitafy'
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(15)
+    doc.setFontSize(16)
     const larguraTexto = doc.getTextWidth(texto)
     const larguraBloco = lado + gap + larguraTexto
     const inicioBloco = centerX - larguraBloco / 2
-    doc.addImage(img, 'PNG', inicioBloco, (26 - lado) / 2, lado, lado)
+    const meioFaixa = 26 / 2
+    doc.addImage(img, 'PNG', inicioBloco, meioFaixa - lado / 2, lado, lado)
     doc.setTextColor(255, 255, 255)
-    doc.text(texto, inicioBloco + lado + gap, 16.5, { baseline: 'middle' })
+    doc.text(texto, inicioBloco + lado + gap, meioFaixa, { baseline: 'middle' })
   } catch {
     // Sem logo, texto centrado puro (fallback idêntico ao header do app)
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(15)
+    doc.setFontSize(16)
     doc.setTextColor(255, 255, 255)
-    doc.text('QUITAFY', centerX, 16.5, { align: 'center', baseline: 'middle' })
+    doc.text('Quitafy', centerX, 26 / 2, { align: 'center', baseline: 'middle' })
   }
 
   // ---- Mês de referência ----

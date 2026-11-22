@@ -24,8 +24,8 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ title = 'Quitafy' }) => {
         <div className="flex items-center gap-2">
           <Link to="/" className="flex items-center gap-2 focus:outline-none">
             <img src={appIcon} alt="" width={28} height={28} className="w-7 h-7 rounded-lg" />
-            <span className="text-xl font-black tracking-wider uppercase text-white drop-shadow-xs">
-              QUITAFY
+            <span className="font-appname text-xl leading-none text-white drop-shadow-xs pb-0.5">
+              Quitafy
             </span>
           </Link>
           <Link

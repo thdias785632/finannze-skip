@@ -1,0 +1,10 @@
+/* ==========================================================================
+ Fonte de destaque do nome do app no header ("Quitafy"): Baloo 2 (Google
+ Fonts, importada no topo de src/main.css) — display arredondada, legível
+ sobre o fundo roxo e contrastando com o chip PREMIUM.
+ ========================================================================== */
+.font-appname {
+  font-family: 'Baloo 2', 'Roboto', system-ui, sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
