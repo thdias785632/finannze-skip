@@ -340,6 +340,33 @@ export const ExtractPage: React.FC = () => {
                 <p>{formatBRLPublic(totalDespesas)}</p>
               </div>
             </div>
+
+            {/* Card de Restante/Economia — entradas − saídas do mês (mesma
+                conta da categoria "Economia" do donut). Positivo = Economia
+                (verde); negativo = Restante (vermelho); zero = neutro. */}
+            <div className="finz-extract-item finz-card-balance">
+              <div className="finz-extract-header">
+                <h2>
+                  {economia > 0 ? 'Economia' : economia < 0 ? 'Restante' : 'Restante/Economia'}
+                </h2>
+              </div>
+
+              <div
+                className={`finz-balance ${
+                  economia > 0
+                    ? 'finz-balance-economia'
+                    : economia < 0
+                      ? 'finz-balance-restante'
+                      : 'finz-balance-neutro'
+                }`}
+              >
+                <h2>{monthLabel}</h2>
+                <p>
+                  {economia < 0 ? '− ' : '+ '}
+                  {formatBRLPublic(Math.abs(economia))}
+                </p>
+              </div>
+            </div>
           </div>
         )}
 

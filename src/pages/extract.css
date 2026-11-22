@@ -179,6 +179,26 @@
   color: var(--finz-blue);
 }
 
+/* ---------- Card de Restante/Economia (3º card) ---------- */
+.finz-extract .finz-balance.finz-balance-economia h2,
+.finz-extract .finz-balance.finz-balance-economia p {
+  color: var(--finz-green);
+}
+.finz-extract .finz-balance.finz-balance-restante h2,
+.finz-extract .finz-balance.finz-balance-restante p {
+  color: var(--finz-red);
+}
+.finz-extract .finz-balance.finz-balance-neutro h2,
+.finz-extract .finz-balance.finz-balance-neutro p {
+  color: var(--finz-text-muted);
+}
+.finz-extract .finz-card-balance .finz-balance {
+  padding-top: 4px;
+}
+.finz-extract .finz-card-balance .finz-balance p {
+  font-size: 18px;
+}
+
 /* ---------- Cartão: footer de navegação de mês ---------- */
 .finz-extract .finz-month-footer {
   position: fixed;
