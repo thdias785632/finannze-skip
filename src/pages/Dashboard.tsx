@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { AppHeader } from '@/components/AppHeader'
 import { BottomNav } from '@/components/BottomNav'
+import { LogoLoader } from '@/components/LogoLoader'
 import { DonutChart, type DonutSlice } from '@/components/DonutChart'
 import { transacoesService, mesDaFatura } from '@/services/transacoes'
 import { cartoesService } from '@/services/cartoes'
@@ -232,7 +233,7 @@ export const DashboardPage: React.FC = () => {
           <h2 className="finz-chart-title">Gastos por Categoria</h2>
           {loading ? (
             <div className="finz-loading">
-              <span className="finz-spinner" />
+              <LogoLoader size={44} />
             </div>
           ) : donutData.length === 0 ? (
             <div className="finz-empty">Nenhuma movimentação registrada neste mês.</div>

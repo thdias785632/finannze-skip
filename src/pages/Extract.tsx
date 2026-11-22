@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { AppHeader } from '@/components/AppHeader'
 import { BottomNav } from '@/components/BottomNav'
+import { LogoLoader } from '@/components/LogoLoader'
 import { DonutChart, type DonutSlice } from '@/components/DonutChart'
 import { CategoryDetail } from '@/components/CategoryDetail'
 import { cartoesService } from '@/services/cartoes'
@@ -377,7 +378,7 @@ export const ExtractPage: React.FC = () => {
               <h1 className="finz-chart-title">Gastos por Categoria</h1>
               {loading ? (
                 <div className="finz-loading">
-                  <span className="finz-spinner" />
+                  <LogoLoader size={44} />
                 </div>
               ) : donutData.length === 0 ? (
                 <div className="finz-empty">Nenhuma despesa registrada neste mês.</div>

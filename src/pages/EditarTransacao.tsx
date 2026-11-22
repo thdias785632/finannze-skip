@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Link, useNavigate, useParams, useLocation } from 'react-router-dom'
 import { AppHeader } from '@/components/AppHeader'
 import { BottomNav } from '@/components/BottomNav'
+import { LogoLoader } from '@/components/LogoLoader'
 import { cartoesService } from '@/services/cartoes'
 import { categoriasService } from '@/services/categorias'
 import { transacoesService, mesDaFatura, descricaoBase, rotuloFatura } from '@/services/transacoes'
@@ -222,7 +223,7 @@ export const EditarTransacaoPage: React.FC = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-[#F6F3FB] flex items-center justify-center">
-        <span className="inline-block w-6 h-6 border-2 border-[#6639A6] border-t-transparent rounded-full animate-spin" />
+        <LogoLoader size={56} />
       </div>
     )
   }

@@ -2,6 +2,7 @@ import React from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import { LogOut, Sparkles } from 'lucide-react'
+import appIcon from '@/assets/logo-192-8a6a4.png'
 
 interface AppHeaderProps {
   title?: string
@@ -21,7 +22,8 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ title = 'Finanzze' }) => {
     <header className="sticky top-0 z-30 bg-[#6639A6] text-white px-4 py-3 shadow-[0_4px_20px_rgba(102,57,166,0.25)]">
       <div className="max-w-3xl mx-auto flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Link to="/" className="flex items-center gap-1.5 focus:outline-none">
+          <Link to="/" className="flex items-center gap-2 focus:outline-none">
+            <img src={appIcon} alt="" width={28} height={28} className="w-7 h-7 rounded-lg" />
             <span className="text-xl font-black tracking-wider uppercase text-white drop-shadow-xs">
               FINANZZE
             </span>

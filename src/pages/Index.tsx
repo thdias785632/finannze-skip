@@ -1,6 +1,7 @@
 import React from 'react'
 import { useAuth } from '@/context/AuthContext'
 import { AuthScreen } from '@/components/AuthScreen'
+import { LogoLoader } from '@/components/LogoLoader'
 import { DashboardPage } from './Dashboard'
 
 export default function Index() {
@@ -10,7 +11,7 @@ export default function Index() {
     return (
       <div className="min-h-screen bg-[#1A0E2E] flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 border-3 border-purple-500 border-t-transparent rounded-full animate-spin" />
+          <LogoLoader size={64} />
           <p className="text-white/70 text-xs font-semibold tracking-wider uppercase">
             Carregando Finanzze...
           </p>

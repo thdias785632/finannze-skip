@@ -1,0 +1,22 @@
+/* Animação do logo durante os carregamentos */
+@keyframes finz-logo-pulse {
+  0%,
+  100% {
+    transform: scale(0.92);
+    opacity: 0.75;
+  }
+  50% {
+    transform: scale(1.06);
+    opacity: 1;
+  }
+}
+
+.finz-logo-loader {
+  animation: finz-logo-pulse 1.3s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .finz-logo-loader {
+    animation: none;
+  }
+}

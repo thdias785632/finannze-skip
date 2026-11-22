@@ -2,6 +2,9 @@
 import { createRoot } from 'react-dom/client'
 import App from './App.tsx'
 import './main.css'
+import { iniciarPWA } from './lib/pwa'
+
+iniciarPWA()
 
 // @skip-protected: Do not remove. Required for React rendering.
 createRoot(document.getElementById('root')!).render(<App />)

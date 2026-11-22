@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { AppHeader } from '@/components/AppHeader'
 import { BottomNav } from '@/components/BottomNav'
+import { LogoLoader } from '@/components/LogoLoader'
 import { transacoesService, mesDaFatura, rotuloFatura } from '@/services/transacoes'
 import { cartoesService } from '@/services/cartoes'
 import type { Cartao, Transacao } from '@/types/financial'
@@ -183,7 +184,7 @@ export const CartoesPage: React.FC = () => {
 
         {loading ? (
           <div className="bg-white rounded-3xl p-8 text-center border border-[#EBE4F5]">
-            <span className="inline-block w-5 h-5 border-2 border-[#6639A6] border-t-transparent rounded-full animate-spin" />
+            <LogoLoader size={48} />
           </div>
         ) : cartoes.length === 0 ? (
           <div className="bg-white rounded-3xl p-8 text-center border border-[#EBE4F5]">
