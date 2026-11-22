@@ -16,7 +16,6 @@ export const mesDaFatura = (
   const d = new Date(transacao.data)
   let ano = d.getFullYear()
   let mes = d.getMonth() // 0-11
-
   if (transacao.tipo === 'despesa' && transacao.cartao_id) {
     const cartao = cartoes.find((c) => c.id === transacao.cartao_id)
     if (cartao && d.getDate() >= cartao.dia_vencimento) {
@@ -27,8 +26,16 @@ export const mesDaFatura = (
       }
     }
   }
-
   return `${ano}-${String(mes + 1).padStart(2, '0')}`
+}
+
+/**
+ * Mês (YYYY-MM) de COMPETÊNCIA de uma transação — sem a regra da fatura:
+ * apenas o mês da data do lançamento. Usado pela réplica de recorrentes.
+ */
+export const mesDaCompetencia = (transacao: Pick<Transacao, 'data'>): string => {
+  const d = new Date(transacao.data)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
 /** Rótulo legível do mês de fatura, ex.: "Fatura de junho/2026". */
@@ -220,6 +227,12 @@ export const transacoesService = {
    * Lista transações. Com `mes` (YYYY-MM), aplica a regra da fatura: cada
    * despesa com cartão é atribuída ao mês de vencimento da respectiva fatura,
    * e o resultado é ordenado por data. Sem `mes`, retorna tudo.
+   *
+   * Recorrentes valem para todos os meses a partir do mês da data original:
+   * além do lançamento original (que aparece UMA ÚNICA VEZ, no seu mês real),
+   * cada lançamento recorrente é replicado nos meses seguintes navegáveis —
+   * sem gravar nada no banco (réplica virtual, em memória). Período "anual"
+   * só replica nos meses de mesmo número (a cada 12 meses).
    */
   async list(filters?: {
     mes?: string // YYYY-MM
@@ -232,9 +245,25 @@ export const transacoesService = {
     if (!filters?.mes) return all
 
     const cartoes = await this.cartoesDoUsuario()
-    return all
-      .filter((t) => mesDaFatura(t, cartoes) === filters.mes)
-      .sort((a, b) => (a.data < b.data ? 1 : -1))
+    const doMes = all.filter((t) => mesDaFatura(t, cartoes) === filters.mes)
+
+    // Réplica virtual dos recorrentes para este mês de referência. O
+    // lançamento original nunca é duplicado: se ele já cai no mês (pela data
+    // ou pela regra da fatura), não gera réplica.
+    const idsNoMes = new Set(doMes.map((t) => t.id))
+    for (const t of all) {
+      if (idsNoMes.has(t.id) || !t.recorrente) continue
+      const mesOrigem = mesDaCompetencia(t)
+      if (mesOrigem >= filters.mes) continue // mês real e anteriores: nada a replicar
+      if ((t.recorrencia_periodo || 'mensal') === 'anual') {
+        // Anual: só nos meses de mesmo número (ex.: todo dezembro).
+        if (mesOrigem.slice(5) !== filters.mes.slice(5)) continue
+      }
+      idsNoMes.add(t.id)
+      doMes.push(t)
+    }
+
+    return doMes.sort((a, b) => (a.data < b.data ? 1 : -1))
   },
 
   /** Lista por mês de competência (data real do lançamento), sem regra de fatura. */

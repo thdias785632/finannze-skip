@@ -377,10 +377,43 @@
  com font-size computado menor que 16px — e o zoom não volta ao sair do
  campo. Forçamos 16px em telas touch/mobile para o zoom nunca disparar.
  ========================================================================== */
+
+/* ==========================================================================
+ Mobile: inputs de formulário nunca estouram a largura do modal/card
+ Em telas estreitas (celular), o input de data (type="date") tem uma largura
+ intrínseca grande: sem max-width ele ultrapassa o modal de cadastro de
+ despesas/entradas e gera overflow horizontal. As três regras a seguir
+ garantem que TODO input (e select/textarea) do formulário caiba dentro do
+ container: max-width 100%, largura fluida e box-sizing border-box.
+ ========================================================================== */
 @media (max-width: 820px) {
   input:not([type='checkbox']):not([type='radio']),
   select,
   textarea {
     font-size: 16px !important;
   }
+}
+
+input:not([type='checkbox']):not([type='radio']),
+select,
+textarea {
+  max-width: 100%;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+/* O input de data (type="date") em mobile: o valor interno (ex. "12/05/2026")
+   é mais largo que o próprio input — obrigamos o wrapping interno e a largura
+   mínima 0 para o navegador refluir o conteúdo em vez de estourar. */
+input[type='date'] {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  width: 100% !important;
+  box-sizing: border-box;
+  -webkit-appearance: none;
+  appearance: none;
+  overflow: hidden;
 }
