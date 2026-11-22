@@ -1,6 +1,6 @@
 import React from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { LayoutDashboard, ReceiptText, CreditCard, Building2, Crown } from 'lucide-react'
+import { LayoutDashboard, ReceiptText, CreditCard, Building2, Users, Crown } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 
 export const BottomNav: React.FC = () => {
@@ -36,6 +36,12 @@ export const BottomNav: React.FC = () => {
           },
         ]
       : []),
+    {
+      to: '/grupos',
+      label: 'Grupos',
+      icon: Users,
+      active: location.pathname.startsWith('/grupos'),
+    },
     {
       to: '/planos',
       label: 'Planos',

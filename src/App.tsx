@@ -7,6 +7,7 @@ import Index from '@/pages/Index'
 import { DashboardPage } from '@/pages/Dashboard'
 import { ExtractPage } from '@/pages/Extract'
 import { CartoesPage } from '@/pages/Cartoes'
+import { GruposPage } from '@/pages/Grupos'
 import { PlansPage } from '@/pages/Plans'
 import { ImoveisLista } from '@/pages/imoveis/ImoveisLista'
 import { ImovelDetalhe } from '@/pages/imoveis/ImovelDetalhe'
@@ -25,6 +26,7 @@ const App: React.FC = () => {
             <Route path="/resumo" element={<DashboardPage />} />
             <Route path="/extrato" element={<ExtractPage />} />
             <Route path="/cartoes" element={<CartoesPage />} />
+            <Route path="/grupos" element={<GruposPage />} />
             <Route path="/imoveis" element={<ImoveisLista />} />
             <Route path="/imoveis/:id" element={<ImovelDetalhe />} />
             <Route path="/planos" element={<PlansPage />} />
