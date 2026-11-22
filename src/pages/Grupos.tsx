@@ -4,7 +4,7 @@ import { BottomNav } from '@/components/BottomNav'
 import { LogoLoader } from '@/components/LogoLoader'
 import { gruposService } from '@/services/grupos'
 import type { GrupoCompleto, MembroGrupo } from '@/services/grupos'
-import { pb } from '@/lib/pocketbase/client'
+import pb from '@/lib/pocketbase/client'
 import { toast } from '@/hooks/use-toast'
 import { Users, UserPlus, Mail, Check, X, Trash2, Plus } from 'lucide-react'
 
