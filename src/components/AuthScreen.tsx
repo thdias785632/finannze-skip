@@ -241,20 +241,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
             </button>
           </form>
 
-          {/* Atalho de preenchimento da conta demo */}
-          <div className="mt-4 pt-4 border-t border-purple-200/60 flex flex-col items-center">
-            <button
-              type="button"
-              onClick={handleQuickDemo}
-              className="text-xs text-[#6639A6] hover:text-[#4A247A] font-semibold underline decoration-dotted transition"
-            >
-              Usar conta demo pré-configurada (Thiago - VIP/Premium)
-            </button>
-            <p className="text-[10px] text-gray-500 mt-0.5">
-              E-mail: thiago.dias.148116@gmail.com • Senha: Skip@Pass
-            </p>
-          </div>
-
           <p className="text-center text-xs text-[#6B7280] mt-4">
             {mode === 'login' ? 'Ainda não tem conta?' : 'Já possui uma conta?'}{' '}
             <button
