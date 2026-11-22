@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-22T21:04:03.774Z",
+  "generatedAt": "2026-11-22T21:13:14.120Z",
   "collections": [
     {
       "name": "users",
@@ -29,30 +29,21 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate"
-          ]
+          "autodateTriggers": ["onCreate"]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate",
-            "onUpdate"
-          ]
+          "autodateTriggers": ["onCreate", "onUpdate"]
         },
         {
           "name": "plan",
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": [
-            "free",
-            "vip",
-            "premium"
-          ]
+          "selectValues": ["free", "vip", "premium"]
         }
       ],
       "indexes": [
@@ -88,11 +79,7 @@
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": [
-            "receita",
-            "despesa",
-            "ambos"
-          ]
+          "selectValues": ["receita", "despesa", "ambos"]
         },
         {
           "name": "icone",
@@ -112,33 +99,26 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate"
-          ]
+          "autodateTriggers": ["onCreate"]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate",
-            "onUpdate"
-          ]
+          "autodateTriggers": ["onCreate", "onUpdate"]
         }
       ],
-      "indexes": [
-        "CREATE INDEX idx_categorias_user ON categorias (user_id)"
-      ]
+      "indexes": ["CREATE INDEX idx_categorias_user ON categorias (user_id)"]
     },
     {
       "name": "transacoes",
       "type": "base",
       "apiRules": {
-        "list": "@request.auth.id != '' && user_id = @request.auth.id",
-        "view": "@request.auth.id != '' && user_id = @request.auth.id",
+        "list": "@request.auth.id != '' && (user_id = @request.auth.id || dividido_com.id ?= @request.auth.id)",
+        "view": "@request.auth.id != '' && (user_id = @request.auth.id || dividido_com.id ?= @request.auth.id)",
         "create": "@request.auth.id != '' && @request.body.user_id = @request.auth.id",
-        "update": "@request.auth.id != '' && user_id = @request.auth.id",
+        "update": "@request.auth.id != '' && (user_id = @request.auth.id || dividido_com.id ?= @request.auth.id)",
         "delete": "@request.auth.id != '' && user_id = @request.auth.id"
       },
       "fields": [
@@ -166,10 +146,7 @@
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": [
-            "receita",
-            "despesa"
-          ]
+          "selectValues": ["receita", "despesa"]
         },
         {
           "name": "data",
@@ -195,10 +172,7 @@
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": [
-            "mensal",
-            "anual"
-          ]
+          "selectValues": ["mensal", "anual"]
         },
         {
           "name": "pago",
@@ -211,19 +185,14 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate"
-          ]
+          "autodateTriggers": ["onCreate"]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate",
-            "onUpdate"
-          ]
+          "autodateTriggers": ["onCreate", "onUpdate"]
         },
         {
           "name": "cartao_id",
@@ -249,20 +218,25 @@
           "type": "number",
           "required": false,
           "system": false
+        },
+        {
+          "name": "dividido_com",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
         }
       ],
-      "indexes": [
-        "CREATE INDEX idx_transacoes_user_data ON transacoes (user_id, data DESC)"
-      ]
+      "indexes": ["CREATE INDEX idx_transacoes_user_data ON transacoes (user_id, data DESC)"]
     },
     {
       "name": "imoveis",
       "type": "base",
       "apiRules": {
-        "list": "@request.auth.id != '' && user_id = @request.auth.id",
-        "view": "@request.auth.id != '' && user_id = @request.auth.id",
-        "create": "@request.auth.id != '' && @request.body.user_id = @request.auth.id",
-        "update": "@request.auth.id != '' && user_id = @request.auth.id",
+        "list": "@request.auth.id != '' && (user_id = @request.auth.id || compartilhado_com.id ?= @request.auth.id)",
+        "view": "@request.auth.id != '' && (user_id = @request.auth.id || compartilhado_com.id ?= @request.auth.id)",
+        "create": "@request.auth.id != '' && @request.body.user_id = @request.auth.id && @request.body.compartilhado_com:length <= 50",
+        "update": "@request.auth.id != '' && (user_id = @request.auth.id || compartilhado_com.id ?= @request.auth.id)",
         "delete": "@request.auth.id != '' && user_id = @request.auth.id"
       },
       "fields": [
@@ -288,7 +262,7 @@
         {
           "name": "valor_original",
           "type": "number",
-          "required": true,
+          "required": false,
           "system": false
         },
         {
@@ -326,19 +300,14 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate"
-          ]
+          "autodateTriggers": ["onCreate"]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate",
-            "onUpdate"
-          ]
+          "autodateTriggers": ["onCreate", "onUpdate"]
         },
         {
           "name": "data_chaves",
@@ -357,11 +326,16 @@
           "type": "number",
           "required": false,
           "system": false
+        },
+        {
+          "name": "compartilhado_com",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
         }
       ],
-      "indexes": [
-        "CREATE INDEX idx_imoveis_user ON imoveis (user_id)"
-      ]
+      "indexes": ["CREATE INDEX idx_imoveis_user ON imoveis (user_id)"]
     },
     {
       "name": "indices_incc",
@@ -403,24 +377,17 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate"
-          ]
+          "autodateTriggers": ["onCreate"]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate",
-            "onUpdate"
-          ]
+          "autodateTriggers": ["onCreate", "onUpdate"]
         }
       ],
-      "indexes": [
-        "CREATE UNIQUE INDEX idx_indices_incc_mes ON indices_incc (mes)"
-      ]
+      "indexes": ["CREATE UNIQUE INDEX idx_indices_incc_mes ON indices_incc (mes)"]
     },
     {
       "name": "imovel_parcelas",
@@ -451,14 +418,7 @@
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": [
-            "entrada",
-            "mensal",
-            "intermediaria",
-            "chaves",
-            "financiamento",
-            "outro"
-          ]
+          "selectValues": ["entrada", "mensal", "intermediaria", "chaves", "financiamento", "outro"]
         },
         {
           "name": "valor_base",
@@ -501,24 +461,17 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate"
-          ]
+          "autodateTriggers": ["onCreate"]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate",
-            "onUpdate"
-          ]
+          "autodateTriggers": ["onCreate", "onUpdate"]
         }
       ],
-      "indexes": [
-        "CREATE INDEX idx_parcelas_imovel ON imovel_parcelas (imovel_id)"
-      ]
+      "indexes": ["CREATE INDEX idx_parcelas_imovel ON imovel_parcelas (imovel_id)"]
     },
     {
       "name": "cartoes",
@@ -561,34 +514,27 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate"
-          ]
+          "autodateTriggers": ["onCreate"]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate",
-            "onUpdate"
-          ]
+          "autodateTriggers": ["onCreate", "onUpdate"]
         }
       ],
-      "indexes": [
-        "CREATE INDEX idx_cartoes_user ON cartoes (user_id)"
-      ]
+      "indexes": ["CREATE INDEX idx_cartoes_user ON cartoes (user_id)"]
     },
     {
       "name": "imoveis_fluxos",
       "type": "base",
       "apiRules": {
-        "list": "@request.auth.id != '' && user_id = @request.auth.id",
-        "view": "@request.auth.id != '' && user_id = @request.auth.id",
-        "create": "@request.auth.id != '' && @request.body.user_id = @request.auth.id",
-        "update": "@request.auth.id != '' && user_id = @request.auth.id",
-        "delete": "@request.auth.id != '' && user_id = @request.auth.id"
+        "list": "@request.auth.id != '' && (user_id = @request.auth.id || imovel_id.compartilhado_com.id ?= @request.auth.id)",
+        "view": "@request.auth.id != '' && (user_id = @request.auth.id || imovel_id.compartilhado_com.id ?= @request.auth.id)",
+        "create": "@request.auth.id != '' && (@request.body.user_id = @request.auth.id || @request.body.imovel_id.compartilhado_com.id ?= @request.auth.id)",
+        "update": "@request.auth.id != '' && (user_id = @request.auth.id || imovel_id.compartilhado_com.id ?= @request.auth.id)",
+        "delete": "@request.auth.id != '' && (user_id = @request.auth.id || imovel_id.compartilhado_com.id ?= @request.auth.id)"
       },
       "fields": [
         {
@@ -616,13 +562,7 @@
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": [
-            "entrada",
-            "sinal",
-            "anual",
-            "mensal",
-            "financiamento"
-          ]
+          "selectValues": ["entrada", "sinal", "anual", "mensal", "financiamento"]
         },
         {
           "name": "ordem",
@@ -641,19 +581,14 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate"
-          ]
+          "autodateTriggers": ["onCreate"]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate",
-            "onUpdate"
-          ]
+          "autodateTriggers": ["onCreate", "onUpdate"]
         }
       ],
       "indexes": [
@@ -665,11 +600,11 @@
       "name": "imoveis_fluxo_parcelas",
       "type": "base",
       "apiRules": {
-        "list": "@request.auth.id != '' && user_id = @request.auth.id",
-        "view": "@request.auth.id != '' && user_id = @request.auth.id",
-        "create": "@request.auth.id != '' && @request.body.user_id = @request.auth.id",
-        "update": "@request.auth.id != '' && user_id = @request.auth.id",
-        "delete": "@request.auth.id != '' && user_id = @request.auth.id"
+        "list": "@request.auth.id != '' && (user_id = @request.auth.id || fluxo_id.imovel_id.compartilhado_com.id ?= @request.auth.id)",
+        "view": "@request.auth.id != '' && (user_id = @request.auth.id || fluxo_id.imovel_id.compartilhado_com.id ?= @request.auth.id)",
+        "create": "@request.auth.id != '' && (@request.body.user_id = @request.auth.id || @request.body.fluxo_id.imovel_id.compartilhado_com.id ?= @request.auth.id)",
+        "update": "@request.auth.id != '' && (user_id = @request.auth.id || fluxo_id.imovel_id.compartilhado_com.id ?= @request.auth.id)",
+        "delete": "@request.auth.id != '' && (user_id = @request.auth.id || fluxo_id.imovel_id.compartilhado_com.id ?= @request.auth.id)"
       },
       "fields": [
         {
@@ -721,24 +656,182 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate"
-          ]
+          "autodateTriggers": ["onCreate"]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate",
-            "onUpdate"
-          ]
+          "autodateTriggers": ["onCreate", "onUpdate"]
         }
       ],
       "indexes": [
         "CREATE INDEX idx_fluxo_parcelas_fluxo ON imoveis_fluxo_parcelas (fluxo_id)",
         "CREATE INDEX idx_fluxo_parcelas_user ON imoveis_fluxo_parcelas (user_id)"
+      ]
+    },
+    {
+      "name": "grupos",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && user_id = @request.auth.id",
+        "view": "@request.auth.id != '' && user_id = @request.auth.id",
+        "create": "@request.auth.id != '' && @request.body.user_id = @request.auth.id",
+        "update": "@request.auth.id != '' && user_id = @request.auth.id",
+        "delete": "@request.auth.id != '' && user_id = @request.auth.id"
+      },
+      "fields": [
+        {
+          "name": "user_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": ["CREATE INDEX idx_grupos_user ON grupos (user_id)"]
+    },
+    {
+      "name": "grupos_membros",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && (user_id = @request.auth.id || grupo_id.user_id = @request.auth.id)",
+        "view": "@request.auth.id != '' && (user_id = @request.auth.id || grupo_id.user_id = @request.auth.id)",
+        "create": "@request.auth.id != '' && @request.body.grupo_id.user_id = @request.auth.id",
+        "update": "@request.auth.id != '' && (grupo_id.user_id = @request.auth.id || user_id = @request.auth.id)",
+        "delete": "@request.auth.id != '' && (grupo_id.user_id = @request.auth.id || user_id = @request.auth.id)"
+      },
+      "fields": [
+        {
+          "name": "grupo_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "grupos"
+        },
+        {
+          "name": "user_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "email",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "nome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "papel",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["dono", "membro"]
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["aceito", "pendente"]
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_grupos_membros_grupo ON grupos_membros (grupo_id)",
+        "CREATE INDEX idx_grupos_membros_user ON grupos_membros (user_id)"
+      ]
+    },
+    {
+      "name": "transacoes_divisoes",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && (transacao_id.user_id = @request.auth.id || user_id = @request.auth.id)",
+        "view": "@request.auth.id != '' && (transacao_id.user_id = @request.auth.id || user_id = @request.auth.id)",
+        "create": "@request.auth.id != '' && @request.body.transacao_id.user_id = @request.auth.id && @request.body.user_id != ''",
+        "update": "@request.auth.id != '' && (transacao_id.user_id = @request.auth.id || user_id = @request.auth.id)",
+        "delete": "@request.auth.id != '' && (transacao_id.user_id = @request.auth.id || user_id = @request.auth.id)"
+      },
+      "fields": [
+        {
+          "name": "transacao_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "transacoes"
+        },
+        {
+          "name": "user_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "valor",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_trans_divisoes_transacao ON transacoes_divisoes (transacao_id)",
+        "CREATE UNIQUE INDEX idx_trans_divisoes_unica ON transacoes_divisoes (transacao_id, user_id)"
       ]
     }
   ]

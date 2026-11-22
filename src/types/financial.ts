@@ -55,6 +55,13 @@ export interface Transacao {
   parcela_numero?: number
   /** Total de parcelas da série; ausente fora de séries. */
   parcela_total?: number
+  /**
+   * Divisão da transação entre membros do grupo: quanto do valor vai para
+   * cada pessoa (o restante, se sobrar, é do dono). Vazio = só do usuário.
+   */
+  divisoes?: TransacaoDivisao[]
+  /** true quando a transação foi criada por outra pessoa e compartilhada comigo */
+  compartilhada?: boolean
   expand?: {
     cartao_id?: Cartao
     categoria_id?: Categoria
@@ -78,6 +85,10 @@ export interface Imovel {
   data_financiamento?: string
   data_entrega?: string
   observacoes?: string
+  /** Usuários (membros do grupo) com acesso de ver e editar ao imóvel. */
+  compartilhado_com?: string[]
+  /** true quando o imóvel foi criado por outra pessoa e compartilhado comigo */
+  compartilhado?: boolean
   created: string
   updated: string
 }

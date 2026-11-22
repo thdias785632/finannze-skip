@@ -33,7 +33,7 @@ export const imoveisService = {
     return mapImovel(await pb.collection('imoveis').getOne(id))
   },
 
-  async create(data: Partial<Imovel> & { nome: string; valor_original: number }): Promise<Imovel> {
+  async create(data: Partial<Imovel> & { nome: string; valor_original?: number }): Promise<Imovel> {
     const userId = pb.authStore.record?.id
     if (!userId) throw new Error('Usuário não autenticado')
     const r = await pb.collection('imoveis').create({
@@ -41,6 +41,7 @@ export const imoveisService = {
       nome: data.nome,
       construtora: data.construtora,
       valor_original: data.valor_original,
+      compartilhado_com: data.compartilhado_com,
       data_contrato: data.data_contrato,
       mes_base_incc: data.mes_base_incc,
       defasagem_incc: data.defasagem_incc ?? 2,
