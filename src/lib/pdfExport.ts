@@ -1,0 +1,235 @@
+/**
+ * Exportação do Extrato em PDF (cliente, jsPDF + jspdf-autotable).
+ *
+ * O PDF espelha o que a tela /extrato mostra para o mês navegado:
+ * cabeçalho com logo, mês/ano de referência, card de Entradas (linhas +
+ * total), card de Saídas (linhas individuais + linha consolidada de Cartões
+ * quando houver + total), o valor de Restante/Economia e o resumo por
+ * categoria (incluindo "Economia" quando positiva).
+ */
+import { jsPDF } from 'jspdf'
+import autoTable from 'jspdf-autotable'
+import type { Transacao } from '@/types/financial'
+import { formatBRLPublic } from '@/lib/format'
+import appIcon from '@/assets/logo-192-8a6a4.png'
+
+const PRIMARY: [number, number, number] = [102, 57, 166] // #6639A6
+const PRIMARY_DARK: [number, number, number] = [74, 31, 122] // #4A1F7A
+const TEXT_DARK: [number, number, number] = [31, 20, 56] // #1F1438
+const TEXT_MUTED: [number, number, number] = [82, 103, 143]
+const GREEN: [number, number, number] = [0, 117, 5] // --finz-green
+const RED: [number, number, number] = [178, 0, 0] // --finz-red
+const BLUE: [number, number, number] = [0, 101, 193] // --finz-blue (totais)
+const BORDER: [number, number, number] = [228, 218, 243] // #E4DAF3
+
+export interface ExtractPdfData {
+  monthLabel: string // ex.: "novembro de 2025"
+  receitas: Transacao[]
+  despesasSemCartao: Transacao[]
+  despesasCartao: Transacao[]
+  nomeCartaoConsolidado: string
+  totalCartoes: number
+  totalReceitas: number
+  totalDespesas: number
+  economia: number
+  categorias: { label: string; value: number }[]
+}
+
+const PAGE_MARGIN = 14
+const CONTENT_WIDTH = 210 - PAGE_MARGIN * 2
+
+const loadLogo = (src: string): Promise<HTMLImageElement> =>
+  new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => resolve(img)
+    img.onerror = reject
+    img.src = src
+  })
+
+/** Linha fina de separação entre seções do PDF. */
+function linha(doc: jsPDF, y: number): number {
+  doc.setDrawColor(...BORDER)
+  doc.setLineWidth(0.4)
+  doc.line(PAGE_MARGIN, y, PAGE_MARGIN + CONTENT_WIDTH, y)
+  return y + 7
+}
+
+/** Cabeçalho de seção (ex.: "Entradas do mês"). */
+function tituloSecao(doc: jsPDF, texto: string, y: number): number {
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(12)
+  doc.setTextColor(...PRIMARY_DARK)
+  doc.text(texto, PAGE_MARGIN, y)
+  return y + 4
+}
+
+/**
+ * Lista de lançamentos + total, fiel ao card da tela: cada linha nome à
+ * esquerda, sinal + valor à direita, total destacado no fim.
+ */
+function secaoLancamentos(
+  doc: jsPDF,
+  titulo: string,
+  itens: { descricao: string; valor: number }[],
+  total: number,
+  sinal: '+' | '−',
+  yInicial: number,
+): number {
+  let y = tituloSecao(doc, titulo, yInicial)
+  y = linha(doc, y)
+
+  if (itens.length === 0) {
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    doc.setTextColor(156, 163, 175)
+    doc.text('Nada registrado neste mês.', PAGE_MARGIN, y)
+    y += 8
+  } else {
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(10)
+    for (const item of itens) {
+      doc.setTextColor(...TEXT_DARK)
+      doc.text(String(item.descricao), PAGE_MARGIN, y, { maxWidth: CONTENT_WIDTH - 60 })
+      doc.setTextColor(...(sinal === '+' ? GREEN : RED))
+      doc.text(`${sinal} ${formatBRLPublic(item.valor)}`, PAGE_MARGIN + CONTENT_WIDTH, y, {
+        align: 'right',
+      })
+      y += 7
+      if (y > 275) {
+        doc.addPage()
+        y = 20
+      }
+    }
+    y = linha(doc, y)
+  }
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9)
+  doc.setTextColor(...TEXT_MUTED)
+  doc.text('Total', PAGE_MARGIN, y)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(10)
+  doc.setTextColor(...BLUE)
+  doc.text(formatBRLPublic(total), PAGE_MARGIN + CONTENT_WIDTH, y, { align: 'right' })
+  return y + 12
+}
+
+/**
+ * Gera o PDF do extrato e dispara o download (desktop) / abertura no
+ * visualizador (mobile). Nome do arquivo: finanzze-extrato-YYYY-MM.pdf.
+ */
+export async function exportarExtratoPdf(dados: ExtractPdfData, mesIso: string): Promise<void> {
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' })
+  const pageWidth = doc.internal.pageSize.getWidth()
+  const centerX = pageWidth / 2
+
+  // ---- Cabeçalho roxo (como o header do app) ----
+  doc.setFillColor(...PRIMARY)
+  doc.rect(0, 0, pageWidth, 26, 'F')
+
+  // Logo centralizado no cabeçalho (se carregar, segue sem ele)
+  try {
+    const img = await loadLogo(appIcon)
+    const lado = 14
+    doc.addImage(img, 'PNG', centerX - lado / 2, 6, lado, lado)
+  } catch {
+    /* logo é opcional */
+  }
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(15)
+  doc.setTextColor(255, 255, 255)
+  doc.text('FINANZZE', centerX, 24, { align: 'center' })
+
+  // ---- Mês de referência ----
+  let y = 36
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(13)
+  doc.setTextColor(...PRIMARY_DARK)
+  doc.text(`Extrato — ${dados.monthLabel}`, centerX, y, { align: 'center' })
+  y += 9
+
+  y = secaoLancamentos(
+    doc,
+    'Entradas do mês',
+    dados.receitas.map((t) => ({ descricao: t.descricao, valor: t.valor })),
+    dados.totalReceitas,
+    '+',
+    y,
+  )
+
+  // Saídas: individuais (sem cartão) + linha consolidada de Cartões
+  const saidas = [
+    ...dados.despesasSemCartao.map((t) => ({ descricao: t.descricao, valor: t.valor })),
+    ...(dados.despesasCartao.length > 0
+      ? [
+          {
+            descricao:
+              dados.despesasCartao.length > 1
+                ? `${dados.nomeCartaoConsolidado} (${dados.despesasCartao.length} lançamentos)`
+                : dados.nomeCartaoConsolidado,
+            valor: dados.totalCartoes,
+          },
+        ]
+      : []),
+  ]
+  y = secaoLancamentos(doc, 'Saídas do mês', saidas, dados.totalDespesas, '−', y)
+
+  // ---- Restante / Economia ----
+  const positivo = dados.economia > 0
+  const neutro = dados.economia === 0
+  doc.setFillColor(...(neutro ? TEXT_MUTED : positivo ? GREEN : RED))
+  doc.rect(PAGE_MARGIN, y, CONTENT_WIDTH, 12, 'F')
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(10)
+  doc.setTextColor(255, 255, 255)
+  doc.text(
+    neutro ? 'Restante/Economia' : positivo ? 'Economia' : 'Restante',
+    PAGE_MARGIN + 4,
+    y + 5,
+  )
+  doc.text(
+    `${dados.economia < 0 ? '− ' : dados.economia > 0 ? '+ ' : ''}${formatBRLPublic(Math.abs(dados.economia))}`,
+    PAGE_MARGIN + CONTENT_WIDTH - 4,
+    y + 5,
+    { align: 'right' },
+  )
+  y += 18
+
+  // ---- Resumo por categoria (só se houver categorias) ----
+  if (dados.categorias.length > 0) {
+    y = tituloSecao(doc, 'Gastos por Categoria', y)
+    y = linha(doc, y)
+    const totalCat = dados.categorias.reduce((acc, c) => acc + c.value, 0)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(10)
+    for (const c of dados.categorias) {
+      const pct = totalCat > 0 ? Math.round((c.value / totalCat) * 100) : 0
+      doc.setTextColor(...TEXT_DARK)
+      doc.text(c.label, PAGE_MARGIN, y, { maxWidth: CONTENT_WIDTH - 80 })
+      doc.setTextColor(...TEXT_MUTED)
+      doc.text(`${formatBRLPublic(c.value)}  ·  ${pct}%`, PAGE_MARGIN + CONTENT_WIDTH, y, {
+        align: 'right',
+      })
+      y += 6
+      if (y > 275) {
+        doc.addPage()
+        y = 20
+      }
+    }
+    y = linha(doc, y)
+  }
+
+  // ---- Rodapé: data de geração ----
+  const geradoEm = new Date().toLocaleDateString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  })
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8)
+  doc.setTextColor(156, 163, 175)
+  doc.text(`Gerado em ${geradoEm} pelo Finanzze`, centerX, 289, { align: 'center' })
+
+  const nomeArquivo = `finanzze-extrato-${mesIso}.pdf`
+  doc.save(nomeArquivo)
+}

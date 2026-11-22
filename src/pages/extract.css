@@ -300,6 +300,42 @@
   }
 }
 
+/* ---------- Botão Exportar PDF (header do card Restante/Economia) ---------- */
+.finz-extract .finz-btn-exportar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  border-radius: 999px;
+  padding: 8px 14px;
+  background: linear-gradient(135deg, #4a1f7a 0%, #6639a6 100%);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(102, 57, 166, 0.3);
+  transition:
+    opacity 0.2s,
+    transform 0.1s;
+}
+.finz-extract .finz-btn-exportar:hover:not(:disabled) {
+  opacity: 0.92;
+}
+.finz-extract .finz-btn-exportar:active:not(:disabled) {
+  transform: scale(0.96);
+}
+.finz-extract .finz-btn-exportar:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+@media (max-width: 420px) {
+  .finz-extract .finz-btn-exportar {
+    padding: 7px 10px;
+    font-size: 11px;
+  }
+}
+
 /* ---------- Main da página: espaço do rodapé fixo + bottom nav ---------- */
 .finz-extract .finz-extract-main {
   padding-bottom: 160px;

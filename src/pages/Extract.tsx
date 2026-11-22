@@ -27,6 +27,8 @@ import {
 import { formatBRLPublic } from '@/lib/format'
 import { useAuth } from '@/context/AuthContext'
 import { Link, useNavigate } from 'react-router-dom'
+import { FileDown } from 'lucide-react'
+import { exportarExtratoPdf } from '@/lib/pdfExport'
 import './extract.css'
 
 /**
@@ -54,6 +56,8 @@ export const ExtractPage: React.FC = () => {
   // Exclusão de despesa de cartão (dialog de escopo p/ parceladas)
   const [alvoExclusao, setAlvoExclusao] = useState<Transacao | null>(null)
   const [dialogExclusaoAberto, setDialogExclusaoAberto] = useState(false)
+  // Exportação em PDF do mês visível
+  const [exportando, setExportando] = useState(false)
 
   // Detalhe de categoria aberto a partir do donut
   const [catDetalhe, setCatDetalhe] = useState<string | null>(null)
@@ -149,6 +153,37 @@ export const ExtractPage: React.FC = () => {
 
   const removerTransacoes = (ids: string[]) => {
     setTransacoes((prev) => prev.filter((t) => !ids.includes(t.id)))
+  }
+
+  const exportar = async () => {
+    if (exportando || isLocked || loading) return
+    setExportando(true)
+    try {
+      await exportarExtratoPdf(
+        {
+          monthLabel,
+          receitas,
+          despesasSemCartao,
+          despesasCartao,
+          nomeCartaoConsolidado,
+          totalCartoes,
+          totalReceitas,
+          totalDespesas,
+          economia,
+          categorias: donutData.map((d) => ({ label: d.label, value: d.value })),
+        },
+        monthStr,
+      )
+    } catch (err) {
+      console.error('Erro ao exportar extrato em PDF:', err)
+      toast({
+        variant: 'destructive',
+        title: 'Erro ao exportar',
+        description: 'Não foi possível gerar o PDF do extrato.',
+      })
+    } finally {
+      setExportando(false)
+    }
   }
 
   const cartoesComDespesa = useMemo(() => {
@@ -344,12 +379,25 @@ export const ExtractPage: React.FC = () => {
 
             {/* Card de Restante/Economia — entradas − saídas do mês (mesma
                 conta da categoria "Economia" do donut). Positivo = Economia
-                (verde); negativo = Restante (vermelho); zero = neutro. */}
+                (verde); negativo = Restante (vermelho); zero = neutro.
+                O botão Exportar PDF usa a posição do header do card para
+                ficar sempre à mão sem alterar o layout dos cards. */}
             <div className="finz-extract-item finz-card-balance">
               <div className="finz-extract-header">
                 <h2>
                   {economia > 0 ? 'Economia' : economia < 0 ? 'Restante' : 'Restante/Economia'}
                 </h2>
+                <button
+                  type="button"
+                  className="finz-btn-exportar"
+                  aria-label="Exportar extrato em PDF"
+                  title="Exportar extrato em PDF"
+                  onClick={exportar}
+                  disabled={exportando}
+                >
+                  <FileDown className="w-4 h-4" />
+                  {exportando ? 'Gerando…' : 'Exportar PDF'}
+                </button>
               </div>
 
               <div
