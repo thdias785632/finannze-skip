@@ -87,16 +87,25 @@ routerAdd('POST', '/backend/v1/grupos/convidar', (c) => {
       'Equipe Quitafy',
     ].join('\n')
 
-    $app
-      .newMailClient()
-      .send(
-        $app
-          .newEmailMessage()
-          .setFrom('Quitafy <no-reply@quitafy.app>')
-          .setSubject(assunto)
-          .setHtml(corpo.replace(/\n/g, '<br>')),
-        email,
+    // Envio best-effort: se o SMTP falhar, registramos nos logs e seguimos —
+    // o convite/membro já está gravado no banco e a rota responde sucesso.
+    try {
+      $app
+        .newMailClient()
+        .send(
+          $app
+            .newEmailMessage()
+            .setFrom('Quitafy <no-reply@quitafy.com.br>')
+            .setSubject(assunto)
+            .setHtml(corpo.replace(/\n/g, '<br>')),
+          email,
+        )
+    } catch (mailErr) {
+      console.error(
+        `[grupos_convite] falha ao enviar e-mail de convite para ${email} (grupo ${grupo.id}, membro ${membro.id}):`,
+        (mailErr && mailErr.message) || mailErr,
       )
+    }
 
     return c.json(200, {
       success: true,
