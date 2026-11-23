@@ -32,28 +32,36 @@ routerAdd('POST', '/backend/v1/grupos/convidar', (c) => {
 
     // Já tem conta com esse e-mail? Vincula ao grupo na hora — sem depender
     // de a pessoa criar conta ou aceitar alguma coisa depois.
+    // Falha aqui NÃO pode derrubar a rota nem impedir o envio do e-mail.
     let jaVinculado = false
-    if (membro.getString('status') !== 'aceito') {
-      const alvo = String(email || '')
-        .trim()
-        .toLowerCase()
-      let usuario = null
-      if (alvo && alvo.includes('@')) {
-        try {
-          usuario = $app.findFirstRecordByFilter('users', `email = '${alvo}'`)
-        } catch (_) {
-          usuario = null
+    try {
+      if (membro.getString('status') !== 'aceito') {
+        const alvo = String(email || '')
+          .trim()
+          .toLowerCase()
+        let usuario = null
+        if (alvo && alvo.includes('@')) {
+          try {
+            usuario = $app.findFirstRecordByFilter('users', `email = '${alvo}'`)
+          } catch (_) {
+            usuario = null
+          }
         }
-      }
-      if (usuario) {
-        membro.set('user_id', usuario.id)
-        membro.set('nome', String(usuario.name() || membro.getString('nome')))
-        membro.set('status', 'aceito')
-        $app.save(membro)
+        if (usuario) {
+          membro.set('user_id', usuario.id)
+          membro.set('nome', String(usuario.getString('name') || membro.getString('nome')))
+          membro.set('status', 'aceito')
+          $app.save(membro)
+          jaVinculado = true
+        }
+      } else if (membro.getString('user_id') !== '') {
         jaVinculado = true
       }
-    } else if (membro.getString('user_id') !== '') {
-      jaVinculado = true
+    } catch (vincErr) {
+      console.error(
+        `[grupos_convite] falha ao vincular conta existente para ${email} (grupo ${grupo.id}, membro ${membro.id}):`,
+        (vincErr && vincErr.message) || vincErr,
+      )
     }
 
     // Quem convidou (dono do grupo) — para assinar o e-mail.
@@ -114,6 +122,10 @@ routerAdd('POST', '/backend/v1/grupos/convidar', (c) => {
       status: membro.getString('status'),
     })
   } catch (err) {
+    console.error(
+      '[grupos_convite] erro na rota /backend/v1/grupos/convidar:',
+      (err && err.message) || err,
+    )
     return c.json(500, { error: err.message || String(err) })
   }
 })
@@ -124,7 +136,7 @@ routerAdd('POST', '/backend/v1/grupos/convidar', (c) => {
  * (status continua pendente — ela aceita pela aba Grupos).
  */
 $app.onRecordAfterCreateSuccess('users').add((e) => {
-  const email = String(e.record.email() || '').toLowerCase()
+  const email = String(e.record.getString('email') || '').toLowerCase()
   if (!email) return
   const pendentes = $app.findRecordsByFilter(
     'grupos_membros',
