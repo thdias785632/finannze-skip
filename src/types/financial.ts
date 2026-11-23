@@ -92,6 +92,8 @@ export interface Imovel {
   defasagem_meses?: number
   /** Defasagem do INCC: quantos meses antes do vencimento o índice é aplicado. */
   defasagem_incc?: number
+  /** Meses de referência do INCC: quantos meses antes do vencimento (editável). */
+  incc_meses_referencia?: number
   data_chaves?: string
   data_financiamento?: string
   data_entrega?: string

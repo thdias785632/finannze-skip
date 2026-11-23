@@ -82,8 +82,8 @@ export interface ImovelCalculado {
   estimado: boolean
 }
 
-/** trava de previsibilidade: a taxa é sempre a de 2 meses antes do vencimento */
-export const TRAVA_INCC_MESES = 2
+/** trava de previsibilidade: padrão de meses antes do vencimento (editável por imóvel) */
+export const TRAVA_INCC_MESES_PADRAO = 2
 
 /** mês atual no formato "YYYY-MM" */
 export const mesAtual = (): string => {
@@ -155,12 +155,13 @@ export const calcularParcela = (
   imovel: Imovel,
   indices: IndiceINCC,
   mediaAnoCorrente: number,
+  mesesReferencia: number = TRAVA_INCC_MESES_PADRAO,
 ): ParcelaCalculada => {
   const venc = new Date(parcela.vencimento)
   const mesVenc = `${venc.getFullYear()}-${String(venc.getMonth() + 1).padStart(2, '0')}`
 
-  // TRAVA: referência sempre 2 meses antes do vencimento
-  const mesReferencia = mesAnterior(mesVenc, TRAVA_INCC_MESES)
+  // TRAVA: referência sempre N meses antes do vencimento (padrão 2)
+  const mesReferencia = mesAnterior(mesVenc, mesesReferencia)
 
   // CARREGO: meses entre a assinatura do contrato e o vencimento
   const assinatura = mesBaseContrato(imovel)
@@ -195,11 +196,12 @@ export const calcularFluxo = (
   imovel: Imovel,
   indices: IndiceINCC,
   mediaAnoCorrente: number,
+  mesesReferencia: number = TRAVA_INCC_MESES_PADRAO,
 ): FluxoCalculado => {
   const calculadas = parcelas
     .filter((p) => p.fluxo_id === fluxo.id)
     .sort((a, b) => a.vencimento.localeCompare(b.vencimento))
-    .map((p) => calcularParcela(p, imovel, indices, mediaAnoCorrente))
+    .map((p) => calcularParcela(p, imovel, indices, mediaAnoCorrente, mesesReferencia))
 
   const totalBase = calculadas.reduce((s, p) => s + p.valorBase, 0)
   const totalCorrigido = calculadas.reduce((s, p) => s + p.valorCorrigido, 0)
@@ -229,10 +231,11 @@ export const calcularImovel = (
   indices: IndiceINCC,
 ): ImovelCalculado => {
   const media = mediaInccAnoCorrente(indices)
+  const mesesRef = imovel.incc_meses_referencia ?? TRAVA_INCC_MESES_PADRAO
   const fluxosCalc = fluxos
     .slice()
     .sort((a, b) => (a.ordem ?? 99) - (b.ordem ?? 99))
-    .map((f) => calcularFluxo(f, parcelas, imovel, indices, media))
+    .map((f) => calcularFluxo(f, parcelas, imovel, indices, media, mesesRef))
 
   const todas = fluxosCalc.flatMap((f) => f.parcelas)
   const totalPago = todas.filter((p) => p.parcela.pago).reduce((s, p) => s + p.valorCorrigido, 0)

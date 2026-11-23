@@ -1,12 +1,12 @@
 import React from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { LayoutDashboard, ReceiptText, CreditCard, Building2, Users, Crown } from 'lucide-react'
+import { LayoutDashboard, ReceiptText, CreditCard, Building2, Users } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { useTemImovelCompartilhado } from '@/hooks/use-tem-imovel-compartilhado'
 
 export const BottomNav: React.FC = () => {
   const location = useLocation()
-  const { plan, canAccessImoveis } = useAuth()
+  const { canAccessImoveis } = useAuth()
   const temImovelCompartilhado = useTemImovelCompartilhado()
   const verImoveis = canAccessImoveis || temImovelCompartilhado
 
@@ -45,13 +45,6 @@ export const BottomNav: React.FC = () => {
       icon: Users,
       active: location.pathname.startsWith('/grupos'),
     },
-    {
-      to: '/planos',
-      label: 'Planos',
-      icon: Crown,
-      active: location.pathname.startsWith('/planos'),
-      badge: plan.toUpperCase(),
-    },
   ]
 
   return (
@@ -76,19 +69,6 @@ export const BottomNav: React.FC = () => {
                 <Icon
                   className={`w-5 h-5 transition-transform ${item.active ? 'scale-110 stroke-[2.4]' : 'stroke-[1.8]'}`}
                 />
-                {item.badge && (
-                  <span
-                    className={`absolute -top-1 -right-2 text-[9px] font-black px-1.5 py-0.2 rounded-full uppercase leading-tight ${
-                      item.badge === 'PREMIUM'
-                        ? 'bg-amber-500 text-white'
-                        : item.badge === 'VIP'
-                          ? 'bg-[#6639A6] text-white'
-                          : 'bg-gray-200 text-gray-700'
-                    }`}
-                  >
-                    {item.badge}
-                  </span>
-                )}
               </div>
               <span
                 className={`text-[11px] mt-0.5 tracking-tight ${item.active ? 'font-bold text-[#6639A6]' : 'font-medium'}`}

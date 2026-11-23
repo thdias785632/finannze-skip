@@ -8,6 +8,7 @@ interface Props {
   onClose: () => void
   imovelId: string
   defasagemIncc: number
+  mesesReferencia?: number
   onSaved: () => void
 }
 
@@ -24,6 +25,7 @@ export const FluxoDialog: React.FC<Props> = ({
   onClose,
   imovelId,
   defasagemIncc,
+  mesesReferencia,
   onSaved,
 }) => {
   const [nome, setNome] = useState('')
@@ -51,6 +53,7 @@ export const FluxoDialog: React.FC<Props> = ({
         valorParcela: Number(valor),
         primeiroVencimento: primeiro,
         defasagemIncc,
+        mesesReferencia,
       })
       setNome('')
       setValor('')
@@ -142,9 +145,13 @@ export const FluxoDialog: React.FC<Props> = ({
           </div>
 
           <p className="text-[11px] text-gray-400">
-            Cada parcela usa o INCC do mês 2 meses antes do vencimento (trava de previsibilidade),
-            aplicado × {defasagemIncc} mês(es) de carrego desde a assinatura do contrato. Índices
-            ainda não divulgados são estimados pela média do INCC do ano corrente.
+            Cada parcela usa o INCC do mês{' '}
+            {mesesReferencia === 0
+              ? 'do próprio vencimento'
+              : `${mesesReferencia} ${mesesReferencia === 1 ? 'mês' : 'meses'} antes do vencimento`}{' '}
+            (configurável no card "Correção pelo INCC"), aplicado × {defasagemIncc} mês(es) de
+            carrego desde a assinatura do contrato. Índices ainda não divulgados são estimados pela
+            média do INCC do ano corrente.
           </p>
 
           {erro && <p className="text-xs text-red-500">{erro}</p>}

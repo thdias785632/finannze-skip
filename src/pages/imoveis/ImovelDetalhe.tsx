@@ -20,7 +20,7 @@ import {
   calcularImovel,
   mesBaseContrato,
   rotuloMes,
-  TRAVA_INCC_MESES,
+  TRAVA_INCC_MESES_PADRAO,
   type IndiceINCC,
   type FluxoCalculado,
   type ParcelaCalculada,
@@ -30,13 +30,6 @@ import type { Imovel, TipoFluxo } from '@/types/financial'
 import { FluxoDialog } from './FluxoDialog'
 import { CompartilharImovelDialog } from '@/components/CompartilharImovelDialog'
 import { Share2, Users, UsersRound } from 'lucide-react'
-
-const REF_MESES = [
-  'Referência: 2 meses antes do vencimento',
-  'Referência: 1 mês antes do vencimento',
-  'Referência: 3 meses antes do vencimento',
-  'Referência: no próprio vencimento',
-]
 
 export const ImovelDetalhe: React.FC = () => {
   const { id } = useParams<{ id: string }>()
@@ -49,6 +42,7 @@ export const ImovelDetalhe: React.FC = () => {
   const [showFluxo, setShowFluxo] = useState(false)
   const [mesBase, setMesBase] = useState('')
   const [defasagem, setDefasagem] = useState(2)
+  const [mesesRef, setMesesRef] = useState(TRAVA_INCC_MESES_PADRAO)
   const [savingCorrecao, setSavingCorrecao] = useState(false)
   const [showCompartilhar, setShowCompartilhar] = useState(false)
   const [erro, setErro] = useState(false)
@@ -64,6 +58,7 @@ export const ImovelDetalhe: React.FC = () => {
       setImovel(imv)
       setMesBase(imv.mes_base_incc)
       setDefasagem(imv.defasagem_incc ?? imv.defasagem_meses ?? 2)
+      setMesesRef(imv.incc_meses_referencia ?? TRAVA_INCC_MESES_PADRAO)
       const idx = await imoveisService.listarIndicesINCC()
       setIndices(idx)
       const fl = await imoveisService.listarFluxos(imv.id)
@@ -117,6 +112,7 @@ export const ImovelDetalhe: React.FC = () => {
         mes_base_incc: mesBase,
         defasagem_incc: defasagem,
         defasagem_meses: defasagem,
+        incc_meses_referencia: mesesRef,
       })
       toast({ title: 'Correção salva' })
       await load()
@@ -147,8 +143,6 @@ export const ImovelDetalhe: React.FC = () => {
     }
   }
 
-  const refLabel =
-    REF_MESES[TRAVA_INCC_MESES] || `Referência: ${TRAVA_INCC_MESES} meses antes do vencimento`
   const assinatura = mesBaseContrato(imovel)
   const exemploParcela = fluxosCalc?.fluxos.flatMap((f) => f.parcelas)[0]
 
@@ -288,14 +282,44 @@ export const ImovelDetalhe: React.FC = () => {
         {/* Correção pelo INCC */}
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-[#ECE6F2] mb-4">
           <h2 className="font-bold text-[#1F1235] mb-3">Correção pelo INCC</h2>
-          <div className="rounded-xl border border-[#ECE6F2] bg-[#FAF8FC] px-3 py-2.5 text-sm mb-2">
-            {refLabel}
+          <label className="text-xs font-semibold text-gray-600">
+            Meses antes do vencimento (referência do INCC)
+          </label>
+          <div className="flex items-center gap-2 mt-1 mb-3">
+            <button
+              type="button"
+              onClick={() => setMesesRef((v) => Math.max(0, (Number(v) || 0) - 1))}
+              className="w-9 h-9 rounded-xl border border-[#ECE6F2] bg-[#FAF8FC] text-lg font-bold text-[#6639A6] hover:bg-[#F1EAF9]"
+              aria-label="Diminuir meses de referência"
+            >
+              −
+            </button>
+            <input
+              type="number"
+              min={0}
+              max={12}
+              value={mesesRef}
+              onChange={(e) => {
+                const v = Math.min(12, Math.max(0, Math.round(Number(e.target.value) || 0)))
+                setMesesRef(v)
+              }}
+              className="w-20 text-center rounded-xl border border-[#ECE6F2] bg-[#FAF8FC] px-3 py-2.5 text-sm outline-none focus:border-[#6639A6]"
+            />
+            <button
+              type="button"
+              onClick={() => setMesesRef((v) => Math.min(12, (Number(v) || 0) + 1))}
+              className="w-9 h-9 rounded-xl border border-[#ECE6F2] bg-[#FAF8FC] text-lg font-bold text-[#6639A6] hover:bg-[#F1EAF9]"
+              aria-label="Aumentar meses de referência"
+            >
+              +
+            </button>
+            <span className="text-xs text-gray-500">0 a 12</span>
           </div>
           <p className="text-xs text-gray-500 mb-3 flex items-start gap-1.5">
             <Info className="w-3.5 h-3.5 shrink-0 mt-0.5 text-[#6639A6]" />
             {exemploParcela
-              ? `Parcela de ${rotuloMes(exemploParcela.mesVenc)} usa o INCC de ${rotuloMes(exemploParcela.mesReferencia)} (trava: 2 meses antes do vencimento), aplicado × ${exemploParcela.mesesCarrego} ${exemploParcela.mesesCarrego === 1 ? 'mês' : 'meses'} de carrego desde ${rotuloMes(assinatura)}.`
-              : 'Cada parcela usa o INCC do mês 2 meses antes do seu vencimento, multiplicado pelos meses de carrego desde a assinatura do contrato.'}
+              ? `Parcela de ${rotuloMes(exemploParcela.mesVenc)} usa o INCC de ${rotuloMes(exemploParcela.mesReferencia)} (${mesesRef === 0 ? 'no próprio vencimento' : `${mesesRef} ${mesesRef === 1 ? 'mês' : 'meses'} antes do vencimento`}), aplicado × ${exemploParcela.mesesCarrego} ${exemploParcela.mesesCarrego === 1 ? 'mês' : 'meses'} de carrego desde ${rotuloMes(assinatura)}.`
+              : `Cada parcela usa o INCC do mês ${mesesRef === 0 ? 'do próprio vencimento' : `${mesesRef} ${mesesRef === 1 ? 'mês' : 'meses'} antes do vencimento`}, multiplicado pelos meses de carrego desde a assinatura do contrato.`}
           </p>
           <label className="text-xs font-semibold text-gray-600">Mês-base do contrato *</label>
           <input
@@ -362,6 +386,7 @@ export const ImovelDetalhe: React.FC = () => {
         onClose={() => setShowFluxo(false)}
         imovelId={imovel.id}
         defasagemIncc={defasagem}
+        mesesReferencia={mesesRef}
         onSaved={() => void load()}
       />
 
