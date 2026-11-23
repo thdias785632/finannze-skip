@@ -90,16 +90,15 @@ routerAdd('POST', '/backend/v1/grupos/convidar', (c) => {
     // Envio best-effort: se o SMTP falhar, registramos nos logs e seguimos —
     // o convite/membro já está gravado no banco e a rota responde sucesso.
     try {
-      $app
-        .newMailClient()
-        .send(
-          $app
-            .newEmailMessage()
-            .setFrom('Quitafy <no-reply@quitafy.com.br>')
-            .setSubject(assunto)
-            .setHtml(corpo.replace(/\n/g, '<br>')),
-          email,
-        )
+      // API do PocketBase (JSVM): MailerMessage + $app.newMailClient().send(message).
+      // O remetente vai como objeto { address, name } e o destinatário em `to`.
+      const mensagem = new MailerMessage({
+        from: { address: 'no-reply@quitafy.com.br', name: 'Quitafy' },
+        to: [{ address: email }],
+        subject: assunto,
+        html: corpo.replace(/\n/g, '<br>'),
+      })
+      $app.newMailClient().send(mensagem)
     } catch (mailErr) {
       console.error(
         `[grupos_convite] falha ao enviar e-mail de convite para ${email} (grupo ${grupo.id}, membro ${membro.id}):`,
