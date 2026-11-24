@@ -13,6 +13,8 @@
  *
  * A Meta exige resposta em menos de 20s: nada aqui bloqueia além do necessário
  * e qualquer falha é capturada para não derrubar a rota em 500.
+ * Formato do retorno de $http.send (JSVM): { statusCode, headers, body (array
+ * de bytes), json, raw } — o log de falha imprime statusCode + corpo completo.
  * Nota da JSVM do PocketBase: callbacks rodam em pool separado — toda a lógica
  * fica inline dentro de cada callback, sem depender de declarações de topo.
  * Nota Skip Cloud: secrets ficam no store do PocketBase — leia com $secrets.get;
@@ -254,22 +256,53 @@ routerAdd('POST', '/backend/v1/whatsapp/webhook', (c) => {
       const resp = $http.send({
         url: 'https://graph.facebook.com/v21.0/' + phoneId + '/messages',
         method: 'POST',
-        headers: [
-          { header: 'Authorization', value: 'Bearer ' + token },
-          { header: 'Content-Type', value: 'application/json' },
-        ],
+        headers: {
+          Authorization: 'Bearer ' + token,
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
           messaging_product: 'whatsapp',
           to: numero,
           type: 'text',
           text: { body: texto },
         }),
-        timeout: '10s',
+        timeout: 10,
       })
-      if (resp.status >= 200 && resp.status < 300) {
+      // $http.send devolve { statusCode, headers, body (bytes), json, raw } —
+      // não existe campo "status" genérico na JSVM do PocketBase.
+      const statusCode = typeof resp.statusCode === 'number' ? resp.statusCode : 0
+      if (statusCode >= 200 && statusCode < 300) {
         console.log('[whatsapp_webhook] resposta enviada para', numero)
       } else {
-        console.error('[whatsapp_webhook] resposta falhou, status', resp.status)
+        // Corpo da Graph API contém o erro real da Meta: error.code, error.message,
+        // error.error_data.details, error.subcode etc.
+        let corpo = ''
+        try {
+          if (resp.json !== undefined && resp.json !== null) {
+            corpo = JSON.stringify(resp.json)
+          }
+        } catch (_) {}
+        if (!corpo && resp.raw) {
+          try {
+            corpo = String(resp.raw)
+          } catch (_) {}
+        }
+        if (!corpo && resp.body && resp.body.length) {
+          try {
+            const pedacos = []
+            for (let i = 0; i < resp.body.length; i += 4096) {
+              pedacos.push(String.fromCharCode.apply(null, resp.body.slice(i, i + 4096)))
+            }
+            corpo = pedacos.join('')
+          } catch (_) {}
+        }
+        if (!corpo) corpo = '(sem corpo na resposta)'
+        console.error(
+          '[whatsapp_webhook] resposta falhou, status_code',
+          statusCode,
+          '— corpo da Graph API:',
+          corpo,
+        )
       }
     } catch (err) {
       console.error(
