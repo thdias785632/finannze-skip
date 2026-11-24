@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-23T01:29:19.281Z",
+  "generatedAt": "2026-11-24T22:37:47.657Z",
   "collections": [
     {
       "name": "users",
@@ -838,6 +838,120 @@
       "indexes": [
         "CREATE INDEX idx_trans_divisoes_transacao ON transacoes_divisoes (transacao_id)",
         "CREATE UNIQUE INDEX idx_trans_divisoes_unica ON transacoes_divisoes (transacao_id, user_id)"
+      ]
+    },
+    {
+      "name": "whatsapp_contas",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && user_id = @request.auth.id",
+        "view": "@request.auth.id != '' && user_id = @request.auth.id",
+        "create": "@request.auth.id != '' && @request.body.user_id = @request.auth.id",
+        "update": "@request.auth.id != '' && user_id = @request.auth.id",
+        "delete": "@request.auth.id != '' && user_id = @request.auth.id"
+      },
+      "fields": [
+        {
+          "name": "numero",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "user_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_whatsapp_contas_numero ON whatsapp_contas (numero)",
+        "CREATE UNIQUE INDEX idx_whatsapp_contas_user ON whatsapp_contas (user_id)"
+      ]
+    },
+    {
+      "name": "whatsapp_mensagens",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && user_id = @request.auth.id",
+        "view": "@request.auth.id != '' && user_id = @request.auth.id",
+        "create": null,
+        "update": null,
+        "delete": null
+      },
+      "fields": [
+        {
+          "name": "msg_id",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "numero",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "user_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "texto",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "transacao_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "transacoes"
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["processada", "sem_vinculo", "sem_valor", "ignorada", "erro"]
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_whatsapp_mensagens_msg_id ON whatsapp_mensagens (msg_id)",
+        "CREATE INDEX idx_whatsapp_mensagens_user ON whatsapp_mensagens (user_id, created DESC)"
       ]
     }
   ]
