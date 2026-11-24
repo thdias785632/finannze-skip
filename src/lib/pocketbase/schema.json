@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-24T23:19:58.429Z",
+  "generatedAt": "2026-11-24T23:44:59.545Z",
   "collections": [
     {
       "name": "users",
@@ -932,7 +932,15 @@
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["processada", "sem_vinculo", "sem_valor", "ignorada", "erro"]
+          "selectValues": [
+            "processada",
+            "sem_vinculo",
+            "sem_valor",
+            "ignorada",
+            "erro",
+            "pendente",
+            "cancelada"
+          ]
         },
         {
           "name": "created",
@@ -952,6 +960,63 @@
       "indexes": [
         "CREATE UNIQUE INDEX idx_whatsapp_mensagens_msg_id ON whatsapp_mensagens (msg_id)",
         "CREATE INDEX idx_whatsapp_mensagens_user ON whatsapp_mensagens (user_id, created DESC)"
+      ]
+    },
+    {
+      "name": "whatsapp_pendencias",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != \"\" && user_id = @request.auth.id",
+        "view": "@request.auth.id != \"\" && user_id = @request.auth.id",
+        "create": null,
+        "update": null,
+        "delete": null
+      },
+      "fields": [
+        {
+          "name": "numero",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "user_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "aguardando",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["cartao", "tipo"]
+        },
+        {
+          "name": "dados",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_wp_numero ON whatsapp_pendencias (numero)",
+        "CREATE INDEX idx_wp_created ON whatsapp_pendencias (created)"
       ]
     }
   ]

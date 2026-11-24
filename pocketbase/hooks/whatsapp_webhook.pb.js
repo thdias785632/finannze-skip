@@ -1,18 +1,30 @@
 /**
- * Webhook do WhatsApp Business (Meta Cloud API).
+ * Webhook do WhatsApp Business (Meta Cloud API) — fluxo conversacional.
  *
  * Rotas:
  *   GET /backend/v1/whatsapp/webhook
  *     Handshake de verificação da Meta: valida hub.verify_token contra o
  *     secret WHATSAPP_VERIFY_TOKEN e devolve hub.challenge em texto puro.
  *   POST /backend/v1/whatsapp/webhook
- *     Recebe notificações de mensagens da Meta. Extrai o texto, resolve o
- *     usuário pelo número (coleção whatsapp_contas) e grava a despesa/entrada
- *     em transacoes. Resposta de confirmação via Graph API é best-effort:
- *     sem WHATSAPP_TOKEN/WHATSAPP_PHONE_NUMBER_ID a mensagem é só registrada.
+ *     Recebe notificações de mensagens da Meta, resolve o usuário pelo número
+ *     (coleção whatsapp_contas) e grava o movimento em transacoes:
+ *       - despesa comum ("gastei 50 no uber");
+ *       - despesa em CARTÃO ("comprei 300 de mercado no cartão nubank") — o
+ *         nome do cartão é casado, tolerante a acento/caixa, com as contas do
+ *         usuário; se citou cartão sem nome identificável, PERGUNTA qual;
+ *       - RECEITA ("recebi 1000 de salário", "entrei 200 pix");
+ *       - PARCELADA ("em 10x", "10x de 50" — mesma lógica de série do app:
+ *         serie_id/parcela_numero/parcela_total, valor/N por mês);
+ *       - RECORRENTE ("assinatura netflix 55 todo mês", "recorrente");
+ *       - entrada vs. saída ambígua → o bot PERGUNTA antes de gravar.
+ *     Perguntas ficam em whatsapp_pendencias (uma por número, expira em 1h);
+ *     a resposta seguinte do mesmo número é interpretada como complemento,
+ *     a menos que pareça um comando novo (tem valor → mensagem nova).
  *
  * A Meta exige resposta em menos de 20s: nada aqui bloqueia além do necessário
- * e qualquer falha é capturada para não derrubar a rota em 500.
+ * e qualquer falha é capturada para não derrubar a rota em 500. A transação é
+ * gravada ANTES da tentativa de resposta; a resposta via Graph API é
+ * best-effort (sem WHATSAPP_TOKEN/WHATSAPP_PHONE_NUMBER_ID apenas registra).
  * Formato do retorno de $http.send (JSVM): { statusCode, headers, body (array
  * de bytes), json, raw } — o log de falha imprime statusCode + corpo completo.
  * Nota da JSVM do PocketBase: callbacks rodam em pool separado — toda a lógica
@@ -65,6 +77,9 @@ routerAdd('GET', '/backend/v1/whatsapp/webhook', (c) => {
 routerAdd('POST', '/backend/v1/whatsapp/webhook', (c) => {
   // ---- helpers (inline: a JSVM não compartilha topo com callbacks) ----
 
+  const PENDENCIA_TTL_HORAS = 1
+  const MAX_PARCELAS = 24
+
   /** Registra a mensagem recebida (log + deduplicação pelo msg_id). */
   function registrarMensagem(msg, userId, status, transacaoId) {
     try {
@@ -79,6 +94,68 @@ routerAdd('POST', '/backend/v1/whatsapp/webhook', (c) => {
     } catch (err) {
       console.error('[whatsapp_webhook] falha ao registrar mensagem:', (err && err.message) || err)
     }
+  }
+
+  /** Apaga a pendência aberta do número, se houver (idempotente). */
+  function limparPendencia(numero) {
+    try {
+      const p = $app.findFirstRecordByFilter('whatsapp_pendencias', `numero = '${numero}'`)
+      $app.delete(p)
+    } catch (_) {
+      /* não havia pendência */
+    }
+  }
+
+  /**
+   * Pendência ainda válida do número (expira em PENDENCIA_TTL_HORAS). Expirada
+   * é apagada e tratada como inexistente.
+   */
+  function pendenciaAtiva(numero) {
+    try {
+      const p = $app.findFirstRecordByFilter('whatsapp_pendencias', `numero = '${numero}'`)
+      const criada = String(p.getString('created') || '')
+      const limite = new Date(Date.now() - PENDENCIA_TTL_HORAS * 3600 * 1000)
+        .toISOString()
+        .replace('T', ' ')
+        .substring(0, 19)
+      if (criada && criada < limite) {
+        try {
+          $app.delete(p)
+        } catch (_) {}
+        return null
+      }
+      return p
+    } catch (_) {
+      return null
+    }
+  }
+
+  /** Grava (ou substitui) a pendência do número com a intenção em aberto. */
+  function salvarPendencia(numero, userId, aguardando, dados) {
+    limparPendencia(numero)
+    try {
+      const rec = new Record($app.findCollectionByNameOrId('whatsapp_pendencias'))
+      rec.set('numero', numero)
+      rec.set('user_id', userId)
+      rec.set('aguardando', aguardando)
+      rec.set('dados', JSON.stringify(dados || {}))
+      $app.save(rec)
+    } catch (err) {
+      console.error('[whatsapp_webhook] falha ao salvar pendência:', (err && err.message) || err)
+    }
+  }
+
+  /** Lê o JSON `dados` da pendência com fallback seguro. */
+  function dadosDaPendencia(p) {
+    let bruto = ''
+    try {
+      bruto = p.getString('dados') || ''
+    } catch (_) {}
+    try {
+      const obj = JSON.parse(bruto)
+      if (obj && typeof obj === 'object') return obj
+    } catch (_) {}
+    return {}
   }
 
   /** Categoria "Outros" (ou a primeira do tipo) do usuário — fallback sem match. */
@@ -104,7 +181,7 @@ routerAdd('POST', '/backend/v1/whatsapp/webhook', (c) => {
 
   /** Procura categoria do usuário cujo nome apareça no texto (match simples). */
   function categoriaPorTexto(userId, tipo, texto) {
-    const termo = String(texto || '').toLowerCase()
+    const termo = semAcento(String(texto || '').toLowerCase())
     if (!termo) return null
     let candidatas = []
     try {
@@ -123,25 +200,120 @@ routerAdd('POST', '/backend/v1/whatsapp/webhook', (c) => {
       return b.getString('nome').length - a.getString('nome').length
     })
     for (const cat of candidatas) {
-      const nome = String(cat.getString('nome') || '')
-        .toLowerCase()
-        .trim()
+      const nome = semAcento(
+        String(cat.getString('nome') || '')
+          .toLowerCase()
+          .trim(),
+      )
       if (nome.length >= 3 && termo.indexOf(nome) !== -1) return cat
     }
     return null
   }
 
-  /** Interpreta o texto da mensagem: valor, tipo (despesa/receita). */
+  /** Remove acentos (para casar cartão/categoria tolerante a acento/caixa). */
+  function semAcento(s) {
+    return String(s || '')
+      .replace(/[\u00c0-\u00c6\u00e0-\u00e6]/g, 'a')
+      .replace(/[\u00c8-\u00cb\u00e8-\u00eb]/g, 'e')
+      .replace(/[\u00cc-\u00cf\u00ec-\u00ef]/g, 'i')
+      .replace(/[\u00d2-\u00d6\u00f2-\u00f6]/g, 'o')
+      .replace(/[\u00d9-\u00dc\u00f9-\u00fc]/g, 'u')
+      .replace(/[\u00d1\u00f1]/g, 'n')
+      .replace(/[\u00c7\u00e7]/g, 'c')
+  }
+
+  /** Normaliza o nome informado no chat para casar com o cadastro do cartão. */
+  function nomeCartaoNormalizado(nome) {
+    const t = semAcento(String(nome || '').toLowerCase())
+    return t
+      .replace(/cart[ãa]o?|cartao|\bdo\b|\bda\b|\bde\b|\bd[oas]?\b/g, ' ')
+      .replace(/\bcredit|\bdebit|\bcr[eé]dito|\bd[eé]bito/g, ' ')
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim()
+  }
+
+  /**
+   * Cartão do usuário cujo nome casa com o texto (ou com o trecho citado).
+   * Cada palavra do nome do cartão precisa aparecer no termo — "cartão nu"
+   * acha "Nubank" sem dar falso positivo em "Inter".
+   */
+  function cartaoPorTexto(userId, termo) {
+    const t = semAcento(String(termo || '').toLowerCase())
+    if (!t) return null
+    let cartoes = []
+    try {
+      cartoes = $app.findRecordsByFilter('cartoes', `user_id = '${userId}'`, 'created', 50, 0)
+    } catch (_) {
+      return null
+    }
+    for (const cartao of cartoes) {
+      const chave = nomeCartaoNormalizado(cartao.getString('nome'))
+      if (!chave) continue
+      const palavras = chave.split(' ').filter(function (p) {
+        return p.length >= 3
+      })
+      if (palavras.length === 0) {
+        if (t.indexOf(chave) !== -1) return cartao
+        continue
+      }
+      const todos = palavras.every(function (p) {
+        return t.indexOf(p) !== -1
+      })
+      if (todos) return cartao
+    }
+    return null
+  }
+
+  /** true quando o texto menciona um cartão sem dizer qual ("no cartão..."). */
+  function mencionaCartaoSemNome(texto) {
+    const t = semAcento(String(texto || '').toLowerCase())
+    return /(^|[^a-z])(no|na|pelo|pela|do|da|um|uma)\s+cartao(\s|$|,|\.|!|\?)/.test(t)
+  }
+
+  /** Interpreta o texto: valor, tipo (despesa/receita/duvida), parcelas, recorrente. */
   function interpretarTexto(texto) {
-    const t = String(texto || '')
-      .toLowerCase()
-      .replace(/r\$/g, ' ')
+    const t = semAcento(
+      String(texto || '')
+        .toLowerCase()
+        .replace(/r\$/g, ' '),
+    )
 
-    const temGasto = /gast|paguei|pagamento|comprei|despesa/.test(t)
-    const temReceita = /receb|entrada|sal[áa]rio|deposit|vendi|ganhei/.test(t)
+    const temGasto = /gast|paguei|pagamento|comprei|despesa|compra|assinatura|assinei|gasto/.test(t)
+    const temReceita =
+      /receb|recebi|entrada|entrei|sal[áa]rio|deposit|vendi|venda|ganhei|ganho|rendiment|provent|reembols/.test(
+        t,
+      )
 
-    // Números: aceita "1.234,56", "1234.56" e "50"
-    const m = t.match(/(\d{1,3}(?:\.\d{3})+|\d+)(?:[.,](\d{1,2}))?/)
+    // Recorrente: "todo mês", "mensal", "fixo", "assinatura", "recorrente".
+    const recorrente =
+      /todo mes|todos os meses|mensal|mensalmente|recorrente|recorrencia|fixo|fixa|assinatura|assinou|por mes/.test(
+        t,
+      ) || temAssinatura(t)
+
+    // Parcelas: "em 10x", "10x de 50", "em 12 vezes".
+    let parcelas = 0
+    const mParc =
+      t.match(/(?:em\s*)?(\d{1,2})\s*x\b/) ||
+      t.match(/(\d{1,2})\s*vezes/) ||
+      t.match(/parcelad[oa]?\s+em\s+(\d{1,2})/) ||
+      t.match(/em\s+(\d{1,2})\s*parcelas?/)
+    if (mParc) {
+      const n = parseInt(mParc[1], 10)
+      if (isFinite(n) && n >= 1 && n <= MAX_PARCELAS) parcelas = n
+      // "1x" não é parcelado — é à vista.
+      if (parcelas === 1) parcelas = 0
+    }
+
+    // Números: aceita "1.234,56", "1234.56", "50" e "10x de 50".
+    let m = null
+    if (mParc && /(?:em\s*)?\d{1,2}\s*x\b/.test(t)) {
+      // Formato "10x de 50": o valor é o que vem DEPOIS do "x".
+      const depois = t.slice(mParc.index + mParc[0].length)
+      m = depois.match(/(\d{1,3}(?:\.\d{3})+|\d+)(?:[.,](\d{1,2}))?/)
+    }
+    if (!m) {
+      m = t.match(/(\d{1,3}(?:\.\d{3})+|\d+)(?:[.,](\d{1,2}))?/)
+    }
     if (!m) return null
 
     const inteiro = m[1].replace(/\./g, '')
@@ -149,15 +321,30 @@ routerAdd('POST', '/backend/v1/whatsapp/webhook', (c) => {
     const valor = parseFloat(inteiro + '.' + centavos)
     if (!isFinite(valor) || valor <= 0) return null
 
-    const tipo = temReceita && !temGasto ? 'receita' : 'despesa'
-    return { valor: valor, tipo: tipo }
+    let tipo = 'despesa'
+    if (temReceita && !temGasto) tipo = 'receita'
+    else if (temReceita && temGasto) tipo = 'duvida'
+
+    return {
+      valor: valor,
+      tipo: tipo,
+      parcelas: parcelas,
+      recorrente: recorrente,
+      textoNormalizado: t,
+    }
   }
 
-  /** Descrição = texto sem o valor e sem "R$", enxugado. */
+  /** "assinatura"/"assinou" implica recorrente (o valor pode não vir com "todo mês"). */
+  function temAssinatura(t) {
+    return /assinatura|assinou|plano/.test(t)
+  }
+
+  /** Descrição = texto sem o valor, sem "R$", sem "em Nx" etc., enxugado. */
   function descrever(texto) {
     let d = String(texto || '').trim()
     d = d.replace(/r\$\s*/gi, '')
-    d = d.replace(/\d{1,3}(?:\.\d{3})*(?:,\d{2})?|\d+(?:[.,]\d{1,2})?/g, '')
+    d = d.replace(/\d{1,3}(?:\.\d{3})*(?:,\d{2})?|\d+(?:[.,]\d{1,2})?(?:\s*x)?/g, '')
+    d = d.replace(/\b(em|de|no|na|pelo|pela|do|da|todo|toda|mes|m[eê]s|x|vezes|parcelas?)\b/gi, ' ')
     d = d.replace(/\s{2,}/g, ' ').trim()
     if (!d) d = 'Movimento via WhatsApp'
     return d.substring(0, 120)
@@ -204,24 +391,90 @@ routerAdd('POST', '/backend/v1/whatsapp/webhook', (c) => {
     return null
   }
 
-  /** Grava a transação a partir da mensagem interpretada. */
-  function gravarTransacao(usuario, msg, interpretado) {
+  /**
+   * Grava a transação a partir da intenção interpretada. Parcelado cria a
+   * série com a MESMA lógica do app (uma transação por mês, valor/N,
+   * serie_id/parcela_numero/parcela_total); recorrente grava com
+   * recorrente=true e recorrencia_periodo='mensal' (a réplica virtual dos
+   * meses seguintes é feita na leitura pelo extrato).
+   */
+  function gravarTransacao(usuario, texto, intento, cartao) {
     const hoje = new Date().toISOString().replace('T', ' ').substring(0, 19) + 'Z'
     const transacao = new Record($app.findCollectionByNameOrId('transacoes'))
     transacao.set('user_id', usuario.id)
-    transacao.set('descricao', descrever(msg.texto))
-    transacao.set('valor', interpretado.valor)
-    transacao.set('tipo', interpretado.tipo)
+    transacao.set('descricao', descrever(texto))
+    transacao.set('valor', intento.parcelas > 1 ? intento.valor / intento.parcelas : intento.valor)
+    transacao.set('tipo', intento.tipo)
     transacao.set('data', hoje)
     transacao.set('pago', true)
 
+    if (cartao) transacao.set('cartao_id', cartao.id)
+
+    if (intento.recorrente) {
+      transacao.set('recorrente', true)
+      transacao.set('recorrencia_periodo', 'mensal')
+    }
+
+    if (intento.parcelas > 1) {
+      transacao.set('serie_id', 'serie:' + Date.now().toString(36) + $security.randomString(6))
+      transacao.set('parcela_numero', 1)
+      transacao.set('parcela_total', intento.parcelas)
+    }
+
     const cat =
-      categoriaPorTexto(usuario.id, interpretado.tipo, msg.texto) ||
-      categoriaFallback(usuario.id, interpretado.tipo)
+      categoriaPorTexto(usuario.id, intento.tipo, texto) ||
+      categoriaFallback(usuario.id, intento.tipo)
     if (cat) transacao.set('categoria_id', cat.id)
 
     $app.save(transacao)
     return transacao
+  }
+
+  /** Cria as parcelas 2..N da série (mesmo dia, mês seguinte a cada uma). */
+  function criarParcelasSeguintes(usuario, texto, intento, cartao, primeira) {
+    const serieId = primeira.getString('serie_id')
+    const descBase = primeira.getString('descricao')
+    const n = intento.parcelas
+    const valorParcela = intento.valor / n
+    const hoje = new Date()
+    const cat = primeira.getString('categoria_id')
+
+    for (let k = 2; k <= n; k++) {
+      const d = new Date(hoje.getFullYear(), hoje.getMonth() + (k - 1), hoje.getDate())
+      const dataParcela =
+        d.getFullYear() +
+        '-' +
+        String(d.getMonth() + 1).padStart(2, '0') +
+        '-' +
+        String(d.getDate()).padStart(2, '0') +
+        ' ' +
+        String(hoje.getHours()).padStart(2, '0') +
+        ':' +
+        String(hoje.getMinutes()).padStart(2, '0') +
+        ':' +
+        String(hoje.getSeconds()).padStart(2, '0') +
+        'Z'
+      try {
+        const rec = new Record($app.findCollectionByNameOrId('transacoes'))
+        rec.set('user_id', usuario.id)
+        rec.set('descricao', descBase + ' (' + k + '/' + n + ')')
+        rec.set('valor', valorParcela)
+        rec.set('tipo', intento.tipo)
+        rec.set('data', dataParcela)
+        rec.set('pago', true)
+        if (cartao) rec.set('cartao_id', cartao.id)
+        if (cat) rec.set('categoria_id', cat)
+        if (serieId) rec.set('serie_id', serieId)
+        rec.set('parcela_numero', k)
+        rec.set('parcela_total', n)
+        $app.save(rec)
+      } catch (err) {
+        console.error(
+          '[whatsapp_webhook] falha ao criar parcela ' + k + '/' + n + ':',
+          (err && err.message) || err,
+        )
+      }
+    }
   }
 
   /** Resposta de confirmação ao usuário no WhatsApp — best-effort. */
@@ -352,41 +605,247 @@ routerAdd('POST', '/backend/v1/whatsapp/webhook', (c) => {
     }
     const usuario = $app.findRecordById('users', conta.getString('user_id'))
 
-    const interpretado = interpretarTexto(msg.texto)
-    if (!interpretado) {
-      console.log('[whatsapp_webhook] sem valor no texto, registro como ignorada:', msg.texto)
+    // Texto vazio (só espaços/emoji colado errado) — não grava nada.
+    if (!String(msg.texto || '').trim()) {
+      console.log('[whatsapp_webhook] texto vazio, registro como ignorada')
       registrarMensagem(msg, usuario.id, 'ignorada', '')
+      responderWhatsApp(
+        msg.from,
+        '🤔 Não entendi. Tente algo como: "gastei 50 no uber", "recebi 1000 de salário" ou "comprei 300 de mercado no cartão nubank em 2x".',
+      )
       return c.json(200, { received: true, interpretada: false })
     }
 
-    let transacao = null
-    try {
-      transacao = gravarTransacao(usuario, msg, interpretado)
+    // ---- pendência aberta? Tento interpretar como resposta ----
+    const pendente = pendenciaAtiva(msg.from)
+    if (pendente) {
+      const aguardando = pendente.getString('aguardando')
+      const dados = dadosDaPendencia(pendente)
       console.log(
-        '[whatsapp_webhook] transação criada:',
-        transacao.id,
-        interpretado.tipo,
-        interpretado.valor,
-        'para',
-        usuario.getString('email'),
+        '[whatsapp_webhook] pendência aberta, aguardando:',
+        aguardando,
+        '— resposta:',
+        msg.texto,
       )
-    } catch (err) {
-      console.error('[whatsapp_webhook] falha ao gravar transação:', (err && err.message) || err)
-      registrarMensagem(msg, usuario.id, 'erro', '')
-      return c.json(200, { received: true, gravada: false })
+
+      if (aguardando === 'cartao') {
+        const cartao = cartaoPorTexto(usuario.id, msg.texto)
+        if (cartao) {
+          limparPendencia(msg.from)
+          registrarMensagem(msg, usuario.id, 'processada', '')
+          return concluirCadastro(usuario, msg, dados, cartao)
+        }
+        // Não é um cartão válido: e parece mensagem nova (tem valor)?
+        const novaTentativa = interpretarTexto(msg.texto)
+        if (novaTentativa) {
+          limparPendencia(msg.from)
+          registrarMensagem(msg, usuario.id, 'cancelada', '')
+          return processarNovaMensagem(usuario, msg, novaTentativa)
+        }
+        // Ainda não sei qual cartão: pergunto de novo.
+        registrarMensagem(msg, usuario.id, 'pendente', '')
+        responderWhatsApp(
+          msg.from,
+          '❓ Não achei esse cartão. Qual é o nome dele? (ex.: "nubank", "inter gold") — ou mande a despesa de novo sem cartão.',
+        )
+        return c.json(200, { received: true, pendente: true })
+      }
+
+      if (aguardando === 'tipo') {
+        const resposta = semAcento(String(msg.texto || '').toLowerCase())
+        let tipo = ''
+        if (/receb|entrada|entrei|salario|deposit|ganhei|receita/.test(resposta)) tipo = 'receita'
+        else if (/gast|sa[íi]da|paguei|comprei|despesa|compra/.test(resposta)) tipo = 'despesa'
+
+        if (tipo) {
+          limparPendencia(msg.from)
+          dados.tipo = tipo
+          registrarMensagem(msg, usuario.id, 'processada', '')
+          return concluirCadastro(usuario, msg, dados, null)
+        }
+        const novaTentativa = interpretarTexto(msg.texto)
+        if (novaTentativa) {
+          limparPendencia(msg.from)
+          registrarMensagem(msg, usuario.id, 'cancelada', '')
+          return processarNovaMensagem(usuario, msg, novaTentativa)
+        }
+        registrarMensagem(msg, usuario.id, 'pendente', '')
+        responderWhatsApp(
+          msg.from,
+          '❓ Me diz: foi ENTRADA (recebi, salário, reembolso) ou SAÍDA (gastei, paguei)?',
+        )
+        return c.json(200, { received: true, pendente: true })
+      }
+
+      // Pendência num estado desconhecido: descarto e trato como nova.
+      limparPendencia(msg.from)
     }
 
-    registrarMensagem(msg, usuario.id, 'processada', transacao.id)
+    // ---- mensagem nova ----
+    return processarNovaMensagem(usuario, msg, interpretarTexto(msg.texto))
 
-    responderWhatsApp(
-      msg.from,
-      (interpretado.tipo === 'receita' ? '✅ Entrada registrada: ' : '✅ Despesa registrada: ') +
-        'R$ ' +
-        interpretado.valor.toFixed(2).replace('.', ',') +
-        (transacao.getString('descricao') ? ' — ' + transacao.getString('descricao') : ''),
-    )
+    /**
+     * Trata uma mensagem nova (não é resposta a pendência): interpreta,
+     * valida e grava ou pergunta.
+     */
+    function processarNovaMensagem(usuario, msg, interpretado) {
+      if (!interpretado) {
+        console.log('[whatsapp_webhook] sem valor no texto, registro como ignorada:', msg.texto)
+        registrarMensagem(msg, usuario.id, 'ignorada', '')
+        responderWhatsApp(
+          msg.from,
+          '🤔 Não consegui identificar o valor. Tente algo como: "gastei 50 no uber" ou "recebi 1000 de salário".',
+        )
+        return c.json(200, { received: true, interpretada: false })
+      }
 
-    return c.json(200, { received: true, gravada: true, transacao_id: transacao.id })
+      // Entrada vs. saída ambígua: PERGUNTO antes de gravar.
+      if (interpretado.tipo === 'duvida') {
+        console.log('[whatsapp_webhook] tipo ambíguo, pergunto:', msg.texto)
+        salvarPendencia(msg.from, usuario.id, 'tipo', {
+          valor: interpretado.valor,
+          parcelas: interpretado.parcelas,
+          recorrente: interpretado.recorrente,
+          descricao: descrever(msg.texto),
+        })
+        registrarMensagem(msg, usuario.id, 'pendente', '')
+        responderWhatsApp(
+          msg.from,
+          '❓ R$ ' +
+            formatarValor(interpretado.valor) +
+            ' — foi ENTRADA (recebi, salário) ou SAÍDA (gastei, paguei)?',
+        )
+        return c.json(200, { received: true, pendente: true })
+      }
+
+      // "no cartão" sem nome identificável: PERGUNTO qual.
+      let cartao = null
+      let citouCartao = false
+      if (interpretado.tipo === 'despesa' && mencionaCartaoSemNome(msg.texto)) {
+        citouCartao = true
+        cartao = cartaoPorTexto(usuario.id, msg.texto)
+        if (!cartao) {
+          console.log('[whatsapp_webhook] cartão citado sem nome, pergunto:', msg.texto)
+          salvarPendencia(msg.from, usuario.id, 'cartao', {
+            valor: interpretado.valor,
+            parcelas: interpretado.parcelas,
+            recorrente: interpretado.recorrente,
+            descricao: descrever(msg.texto),
+          })
+          registrarMensagem(msg, usuario.id, 'pendente', '')
+          responderWhatsApp(
+            msg.from,
+            '❓ Em qual cartão? Responda com o nome dele (ex.: "nubank", "inter").',
+          )
+          return c.json(200, { received: true, pendente: true })
+        }
+      }
+
+      return concluirCadastro(
+        usuario,
+        msg,
+        {
+          valor: interpretado.valor,
+          tipo: interpretado.tipo,
+          parcelas: interpretado.parcelas,
+          recorrente: interpretado.recorrente,
+          descricao: descrever(msg.texto),
+        },
+        cartao,
+      )
+    }
+
+    /**
+     * Conclui o cadastro (vem da mensagem nova ou da resposta à pendência):
+     * grava a transação/série e responde confirmando O QUE foi gravado.
+     */
+    function concluirCadastro(usuario, msg, dados, cartao) {
+      const intento = {
+        valor: Number(dados.valor) || 0,
+        tipo: dados.tipo,
+        parcelas: Number(dados.parcelas) || 0,
+        recorrente: Boolean(dados.recorrente),
+      }
+      if (!intento.valor || intento.valor <= 0) {
+        registrarMensagem(msg, usuario.id, 'erro', '')
+        limparPendencia(msg.from)
+        responderWhatsApp(
+          msg.from,
+          '⚠️ Não consegui identificar o valor da despesa. Tente de novo, ex.: "gastei 50 no uber".',
+        )
+        return c.json(200, { received: true, erro: true })
+      }
+      if (intento.tipo !== 'receita' && intento.tipo !== 'despesa') {
+        registrarMensagem(msg, usuario.id, 'erro', '')
+        limparPendencia(msg.from)
+        responderWhatsApp(
+          msg.from,
+          '⚠️ Não ficou claro se é entrada ou saída. Tente de novo, ex.: "gastei 50 no uber" ou "recebi 1000 de salário".',
+        )
+        return c.json(200, { received: true, erro: true })
+      }
+
+      let transacao = null
+      try {
+        transacao = gravarTransacao(usuario, msg.texto, intento, cartao)
+        if (intento.parcelas > 1) {
+          criarParcelasSeguintes(usuario, msg.texto, intento, cartao, transacao)
+        }
+        console.log(
+          '[whatsapp_webhook] transação criada:',
+          transacao.id,
+          intento.tipo,
+          intento.valor,
+          intento.parcelas > 1 ? '(em ' + intento.parcelas + 'x)' : '',
+          cartao ? '(cartão ' + cartao.getString('nome') + ')' : '(sem cartão)',
+          'para',
+          usuario.getString('email'),
+        )
+      } catch (err) {
+        console.error('[whatsapp_webhook] falha ao gravar transação:', (err && err.message) || err)
+        registrarMensagem(msg, usuario.id, 'erro', '')
+        limparPendencia(msg.from)
+        responderWhatsApp(
+          msg.from,
+          '😣 Deu ruim aqui do meu lado e não consegui registrar. Tenta de novo em instantes, por favor.',
+        )
+        return c.json(200, { received: true, gravada: false })
+      }
+
+      registrarMensagem(msg, usuario.id, 'processada', transacao.id)
+      limparPendencia(msg.from)
+
+      // Confirmação sempre informando o que foi gravado.
+      const rotuloTipo =
+        intento.tipo === 'receita' ? '✅ Entrada registrada: R$ ' : '✅ Despesa registrada: R$ '
+      let resposta =
+        rotuloTipo +
+        formatarValor(transacao.getFloat('valor')) +
+        ' — ' +
+        transacao.getString('descricao')
+      if (cartao) resposta += ' no cartão ' + cartao.getString('nome')
+      if (intento.parcelas > 1) {
+        resposta +=
+          ' (parcelado em ' +
+          intento.parcelas +
+          'x de R$ ' +
+          formatarValor(intento.valor / intento.parcelas) +
+          ')'
+      }
+      if (intento.recorrente) resposta += ' — recorrente todo mês'
+
+      responderWhatsApp(msg.from, resposta)
+      return c.json(200, { received: true, gravada: true, transacao_id: transacao.id })
+    }
+
+    /** Formata valor pt-BR: 1234.5 → "1.234,50". */
+    function formatarValor(v) {
+      const partes = Number(v).toFixed(2).split('.')
+      const inteiro = partes[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+      return inteiro + ',' + partes[1]
+    }
+
+    return c.json(200, { received: true })
   } catch (err) {
     // Nunca derrubar em 500: a Meta reenviaria e o fluxo travaria.
     console.error('[whatsapp_webhook] erro no POST do webhook:', (err && err.message) || err)
