@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-24T23:44:59.545Z",
+  "generatedAt": "2026-11-25T01:06:27.229Z",
   "collections": [
     {
       "name": "users",
@@ -44,6 +44,12 @@
           "required": false,
           "system": false,
           "selectValues": ["free", "vip", "premium"]
+        },
+        {
+          "name": "telefone",
+          "type": "text",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": [

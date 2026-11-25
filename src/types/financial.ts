@@ -5,6 +5,7 @@ export interface User {
   email: string
   name: string
   plan: UserPlan
+  telefone?: string
   avatar?: string
   created: string
   updated: string

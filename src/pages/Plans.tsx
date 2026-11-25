@@ -3,74 +3,11 @@ import { AppHeader } from '@/components/AppHeader'
 import { BottomNav } from '@/components/BottomNav'
 import { useAuth } from '@/context/AuthContext'
 import type { UserPlan } from '@/types/financial'
-import { Check, Sparkles, Crown, Shield, Info, ArrowRight } from 'lucide-react'
+import { PLANOS } from '@/lib/planos'
+import { Check, Crown, Shield, Info } from 'lucide-react'
 
 export const PlansPage: React.FC = () => {
-  const { plan, user } = useAuth()
-
-  const plansConfig = [
-    {
-      id: 'free' as UserPlan,
-      name: 'Free',
-      tagline: 'O essencial para suas finanças',
-      price: 'Grátis',
-      color: 'border-gray-200 bg-white',
-      badge: 'Básico',
-      features: [
-        { title: 'Controle de receitas e despesas', included: true },
-        { title: 'Cartões de crédito com controle de fatura', included: true },
-        { title: 'Categorias e gráfico de donut animado', included: true },
-        { title: 'Extrato do mês atual e passados', included: true },
-        { title: 'Despesas recorrentes fixas', included: false, reason: 'Apenas VIP e Premium' },
-        {
-          title: 'Extrato e previsão de meses futuros',
-          included: false,
-          reason: 'Apenas VIP e Premium',
-        },
-        {
-          title: 'Módulo de Imóveis na planta (INCC)',
-          included: false,
-          reason: 'Exclusivo do Premium',
-        },
-      ],
-    },
-    {
-      id: 'vip' as UserPlan,
-      name: 'VIP',
-      tagline: 'Previsibilidade e despesas recorrentes',
-      price: 'Sob Consulta',
-      color: 'border-[#6639A6] bg-purple-50/40 shadow-md',
-      badge: 'Mais Popular',
-      popular: true,
-      features: [
-        { title: 'Tudo incluso no plano Free', included: true },
-        { title: 'Despesas e receitas recorrentes automáticas', included: true },
-        { title: 'Visualização de extratos de meses futuros', included: true },
-        { title: 'Previsão de fluxo de caixa', included: true },
-        {
-          title: 'Módulo de Imóveis na planta (INCC)',
-          included: false,
-          reason: 'Exclusivo do Premium',
-        },
-      ],
-    },
-    {
-      id: 'premium' as UserPlan,
-      name: 'Premium',
-      tagline: 'Controle total com correção de imóveis pelo INCC',
-      price: 'Sob Consulta',
-      color: 'border-amber-400 bg-gradient-to-b from-amber-50/50 to-white shadow-lg',
-      badge: 'Completo',
-      features: [
-        { title: 'Tudo incluso nos planos Free e VIP', included: true },
-        { title: 'Módulo exclusivo de Imóveis na planta', included: true },
-        { title: 'Correção pelo INCC oficial do Banco Central (SGS 192)', included: true },
-        { title: 'Cálculo de defasagem e mês-base contratual', included: true },
-        { title: 'Comparativo de valor original vs valor corrigido', included: true },
-        { title: 'Prioridade em novos recursos do Quitafy', included: true },
-      ],
-    },
-  ]
+  const { plan } = useAuth()
 
   return (
     <div className="min-h-screen bg-[#F6F3FB] text-[#1F1438] pb-24">
@@ -105,7 +42,7 @@ export const PlansPage: React.FC = () => {
 
         {/* Cards dos Planos */}
         <div className="space-y-3.5">
-          {plansConfig.map((p) => {
+          {PLANOS.map((p) => {
             const isCurrent = plan === p.id
             return (
               <div
@@ -116,7 +53,7 @@ export const PlansPage: React.FC = () => {
               >
                 {p.popular && (
                   <div className="absolute top-0 right-0 bg-[#6639A6] text-white text-[9px] uppercase font-black px-3 py-1 rounded-bl-xl tracking-wider">
-                    {p.badge}
+                    Mais Popular
                   </div>
                 )}
 
@@ -131,6 +68,17 @@ export const PlansPage: React.FC = () => {
                       )}
                     </h2>
                     <p className="text-xs text-gray-500">{p.tagline}</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <span className="text-lg font-black text-[#1F1438]">{p.price}</span>
+                    {p.period && (
+                      <span className="block text-[10px] text-gray-500 font-semibold">
+                        {p.period}
+                      </span>
+                    )}
+                    {p.popular && (
+                      <span className="block text-[10px] font-bold text-[#6639A6]">Assine VIP</span>
+                    )}
                   </div>
                 </div>
 

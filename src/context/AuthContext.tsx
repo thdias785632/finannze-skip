@@ -11,7 +11,7 @@ interface AuthContextType {
   canAccessFutureExtract: boolean
   canAccessImoveis: boolean
   login: (email: string, pass: string) => Promise<User>
-  signup: (name: string, email: string, pass: string) => Promise<User>
+  signup: (name: string, email: string, pass: string, telefone: string) => Promise<User>
   logout: () => void
   refresh: () => Promise<void>
   // Permite simulação/ativação para teste direto na interface caso desejado
@@ -62,10 +62,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }
 
-  const signup = async (name: string, email: string, pass: string) => {
+  const signup = async (name: string, email: string, pass: string, telefone: string) => {
     setLoading(true)
     try {
-      const created = await authService.signup(name, email, pass)
+      const created = await authService.signup(name, email, pass, telefone)
       setUser(created)
       return created
     } finally {

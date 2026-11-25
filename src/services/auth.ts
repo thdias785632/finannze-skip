@@ -12,6 +12,7 @@ export const authService = {
       email: rec.email,
       name: (rec.name as string) || (rec.email ? rec.email.split('@')[0] : 'Usuário'),
       plan: (rec.plan as UserPlan) || 'free',
+      telefone: (rec.telefone as string) || undefined,
       avatar: rec.avatar as string | undefined,
       created: rec.created,
       updated: rec.updated,
@@ -30,19 +31,21 @@ export const authService = {
       email: rec.email,
       name: (rec.name as string) || (rec.email ? rec.email.split('@')[0] : 'Usuário'),
       plan: (rec.plan as UserPlan) || 'free',
+      telefone: (rec.telefone as string) || undefined,
       avatar: rec.avatar as string | undefined,
       created: rec.created,
       updated: rec.updated,
     }
   },
 
-  async signup(name: string, email: string, pass: string): Promise<User> {
-    // Cria novo usuário (nasce no plano 'free')
+  async signup(name: string, email: string, pass: string, telefone: string): Promise<User> {
+    // Cria novo usuário (nasce no plano 'free', com telefone com DDI)
     await pb.collection('users').create({
       email,
       password: pass,
       passwordConfirm: pass,
       name,
+      telefone,
       plan: 'free',
     })
 
@@ -65,6 +68,7 @@ export const authService = {
           (rec.record.name as string) ||
           (rec.record.email ? rec.record.email.split('@')[0] : 'Usuário'),
         plan: (rec.record.plan as UserPlan) || 'free',
+        telefone: (rec.record.telefone as string) || undefined,
         avatar: rec.record.avatar as string | undefined,
         created: rec.record.created,
         updated: rec.record.updated,
