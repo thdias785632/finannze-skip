@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-25T01:06:27.229Z",
+  "generatedAt": "2026-11-25T01:21:43.407Z",
   "collections": [
     {
       "name": "users",
@@ -945,7 +945,8 @@
             "ignorada",
             "erro",
             "pendente",
-            "cancelada"
+            "cancelada",
+            "plano_insuficiente"
           ]
         },
         {

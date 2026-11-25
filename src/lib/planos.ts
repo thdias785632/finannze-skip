@@ -2,7 +2,8 @@ import type { UserPlan } from '@/types/financial'
 
 /**
  * Configuração única dos planos do Quitafy, usada pela tela de Planos,
- * pela tela de boas-vindas pós-cadastro e por qualquer surface futura.
+ * pelo texto do template de boas-vindas do WhatsApp (hook de cadastro) e
+ * por qualquer surface futura.
  */
 export interface BeneficioPlano {
   title: string

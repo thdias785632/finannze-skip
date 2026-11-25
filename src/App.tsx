@@ -2,7 +2,6 @@ import React from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { AuthProvider } from '@/context/AuthContext'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
-import { BoasVindasRoute } from '@/components/BoasVindasRoute'
 import ScrollToTop from '@/components/ScrollToTop'
 import Index from '@/pages/Index'
 import { DashboardPage } from '@/pages/Dashboard'
@@ -15,7 +14,6 @@ import { ImovelDetalhe } from '@/pages/imoveis/ImovelDetalhe'
 import { NewTransactionPage } from '@/pages/NewTransaction'
 import { EditarTransacaoPage } from '@/pages/EditarTransacao'
 import NotFound from '@/pages/NotFound'
-import { BoasVindas } from '@/components/BoasVindas'
 
 const App: React.FC = () => {
   return (
@@ -24,9 +22,6 @@ const App: React.FC = () => {
         <ScrollToTop />
         <Routes>
           <Route path="/" element={<Index />} />
-          <Route element={<BoasVindasRoute />}>
-            <Route path="/boas-vindas" element={<BoasVindas />} />
-          </Route>
           <Route element={<ProtectedRoute />}>
             <Route path="/resumo" element={<DashboardPage />} />
             <Route path="/extrato" element={<ExtractPage />} />

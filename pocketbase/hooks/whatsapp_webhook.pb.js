@@ -20,6 +20,9 @@
  *     Perguntas ficam em whatsapp_pendencias (uma por número, expira em 1h);
  *     a resposta seguinte do mesmo número é interpretada como complemento,
  *     a menos que pareça um comando novo (tem valor → mensagem nova).
+ *     RESTRIÇÃO DE PLANO: a interação pelo WhatsApp é exclusiva do plano
+ *     Premium — quem é free ou VIP tem a mensagem LOGADA (nada é gravado em
+ *     transacoes) e recebe uma resposta explicando como ativar o Premium.
  *
  * A Meta exige resposta em menos de 20s: nada aqui bloqueia além do necessário
  * e qualquer falha é capturada para não derrubar a rota em 500. A transação é
@@ -605,6 +608,32 @@ routerAdd('POST', '/backend/v1/whatsapp/webhook', (c) => {
     }
     const usuario = $app.findRecordById('users', conta.getString('user_id'))
 
+    // ---- trava de plano: interação pelo WhatsApp é exclusiva do Premium ----
+    // Free e VIP têm a mensagem registrada (com um status próprio, para o
+    // log do painel), NADA é gravado em transacoes e o bot explica o plano.
+    const planoUsuario = String(usuario.getString('plan') || 'free').toLowerCase()
+    if (planoUsuario !== 'premium') {
+      console.log(
+        '[whatsapp_webhook] interação bloqueada: usuário',
+        usuario.getString('email'),
+        'no plano',
+        planoUsuario,
+        '(WhatsApp é exclusivo do Premium)',
+      )
+      registrarMensagem(msg, usuario.id, 'plano_insuficiente', '')
+      limparPendencia(msg.from)
+      responderWhatsApp(
+        msg.from,
+        '🔒 Olha, o atendimento pelo WhatsApp faz parte do plano *Premium* do Quitafy (R$ 29,90/mês), ' +
+          'que também inclui o módulo de Imóveis na planta com correção pelo INCC.\n\n' +
+          'Pra liberar, basta falar com a gente pedindo a ativação do Premium — a ativação é manual ' +
+          'e o time faz rapidinho. Depois disso, volta aqui e registra tudo por mensagem: ' +
+          '"gastei 50 no uber", "recebi 1000 de salário", parcelas, recorrentes e mais.\n\n' +
+          'Enquanto isso, você pode lançar suas despesas normalmente pelo app. 💜',
+      )
+      return c.json(200, { received: true, bloqueado_plano: planoUsuario })
+    }
+
     // Texto vazio (só espaços/emoji colado errado) — não grava nada.
     if (!String(msg.texto || '').trim()) {
       console.log('[whatsapp_webhook] texto vazio, registro como ignorada')
@@ -850,5 +879,155 @@ routerAdd('POST', '/backend/v1/whatsapp/webhook', (c) => {
     // Nunca derrubar em 500: a Meta reenviaria e o fluxo travaria.
     console.error('[whatsapp_webhook] erro no POST do webhook:', (err && err.message) || err)
     return c.json(200, { received: true, erro: true })
+  }
+})
+
+/**
+ * Mensagem de boas-vindas pelo WhatsApp no cadastro.
+ *
+ * Roda depois de o usuário novo ser gravado (afterCreateSuccess do users):
+ * se o cadastro trouxe telefone com DDI (+55DDDNUMERO, como o AuthScreen
+ * normaliza), envia um TEMPLATE de mensagem da Meta — obrigatório porque a
+ * mensagem é iniciada pelo business, fora da janela de 24h do usuário.
+ *
+ * O template precisa estar criado e APROVADO no painel da Meta (WhatsApp
+ * Manager) ANTES de funcionar; o nome dele vem do secret
+ * WHATSAPP_WELCOME_TEMPLATE (padrão "boas_vindas_quitafy"). O conteúdo
+ * aprovado na Meta deve explicar os planos: VIP R$ 14,99/mês (despesas
+ * recorrentes e extratos de todos os meses) e Premium R$ 29,90/mês (imóveis
+ * na planta com INCC e interação pelo WhatsApp).
+ *
+ * O envio é best-effort: falha de rede, template não aprovado ou número sem
+ * WhatsApp NUNCA derruba o cadastro — só aparece no log [signup_whatsapp].
+ */
+$app.onRecordAfterCreateSuccess('users').add((e) => {
+  const rec = e.record
+  const telefone = String(rec.getString('telefone') || '').trim()
+  if (!telefone) {
+    console.log('[signup_whatsapp] cadastro sem telefone, pulo envio:', rec.getString('email'))
+    return
+  }
+
+  // Número no formato da Meta: só dígitos (o AuthScreen grava +55DDDNUMERO).
+  const para = telefone.replace(/\D/g, '')
+  if (!para) {
+    console.log('[signup_whatsapp] telefone sem dígitos, pulo envio:', telefone)
+    return
+  }
+
+  const email = rec.getString('email')
+
+  // Nome do template via secret WHATSAPP_WELCOME_TEMPLATE, com padrão
+  // plausível caso não esteja configurado. O idioma tem que bater com o do
+  // template aprovado na Meta (pt_BR para contas brasileiras).
+  const nomeTemplate =
+    (function lerSecret(nome) {
+      try {
+        if ($secrets.has(nome)) return $secrets.get(nome)
+      } catch (_) {}
+      try {
+        return $os.getenv(nome) || ''
+      } catch (_) {}
+      return ''
+    })('WHATSAPP_WELCOME_TEMPLATE') || 'boas_vindas_quitafy'
+
+  console.log(
+    '[signup_whatsapp] tentando enviar boas-vindas para',
+    para,
+    'usuário',
+    email,
+    '(template:',
+    nomeTemplate + ')',
+  )
+
+  const token = (function lerSecret(nome) {
+    try {
+      if ($secrets.has(nome)) return $secrets.get(nome)
+    } catch (_) {}
+    try {
+      return $os.getenv(nome) || ''
+    } catch (_) {}
+    return ''
+  })('WHATSAPP_TOKEN')
+  const phoneId = (function lerSecret(nome) {
+    try {
+      if ($secrets.has(nome)) return $secrets.get(nome)
+    } catch (_) {}
+    try {
+      return $os.getenv(nome) || ''
+    } catch (_) {}
+    return ''
+  })('WHATSAPP_PHONE_NUMBER_ID')
+
+  if (!token || !phoneId) {
+    console.error(
+      '[signup_whatsapp] WHATSAPP_TOKEN/WHATSAPP_PHONE_NUMBER_ID ausentes — boas-vindas não enviada',
+    )
+    return
+  }
+
+  try {
+    const resp = $http.send({
+      url: 'https://graph.facebook.com/v21.0/' + phoneId + '/messages',
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + token,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        to: para,
+        type: 'template',
+        template: {
+          name: nomeTemplate,
+          language: { code: 'pt_BR' },
+        },
+      }),
+      timeout: 10,
+    })
+
+    const statusCode = typeof resp.statusCode === 'number' ? resp.statusCode : 0
+    if (statusCode >= 200 && statusCode < 300) {
+      console.log('[signup_whatsapp] boas-vindas enviada para', para)
+    } else {
+      // Falha típica: template inexistente/não aprovado (error.code 132000/
+      // 132001), número sem WhatsApp (131026), token vencido. O corpo da
+      // Graph API traz o detalhe real da Meta.
+      let corpo = ''
+      try {
+        if (resp.json !== undefined && resp.json !== null) {
+          corpo = JSON.stringify(resp.json)
+        }
+      } catch (_) {}
+      if (!corpo && resp.raw) {
+        try {
+          corpo = String(resp.raw)
+        } catch (_) {}
+      }
+      if (!corpo && resp.body && resp.body.length) {
+        try {
+          const pedacos = []
+          for (let i = 0; i < resp.body.length; i += 4096) {
+            pedacos.push(String.fromCharCode.apply(null, resp.body.slice(i, i + 4096)))
+          }
+          corpo = pedacos.join('')
+        } catch (_) {}
+      }
+      if (!corpo) corpo = '(sem corpo na resposta)'
+      console.error(
+        '[signup_whatsapp] envio falhou, status_code',
+        statusCode,
+        '— corpo da Graph API:',
+        corpo,
+      )
+    }
+  } catch (err) {
+    // Best-effort: nunca derruba o cadastro (o usuário já foi gravado).
+    console.error(
+      '[signup_whatsapp] erro ao enviar boas-vindas para',
+      para,
+      ':',
+      (err && err.message) || err,
+    )
   }
 })

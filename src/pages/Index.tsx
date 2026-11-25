@@ -1,5 +1,4 @@
 import React from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import { AuthScreen } from '@/components/AuthScreen'
 import { LogoLoader } from '@/components/LogoLoader'
@@ -7,7 +6,6 @@ import { DashboardPage } from './Dashboard'
 
 export default function Index() {
   const { user, loading } = useAuth()
-  const navigate = useNavigate()
 
   if (loading) {
     return (
@@ -23,13 +21,7 @@ export default function Index() {
   }
 
   if (!user) {
-    return (
-      <AuthScreen
-        onSuccess={() => {
-          navigate('/boas-vindas', { replace: true })
-        }}
-      />
-    )
+    return <AuthScreen />
   }
 
   return <DashboardPage />
