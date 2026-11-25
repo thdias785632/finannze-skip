@@ -136,35 +136,12 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
 
       {/* Cabeçalho Hero com visual idêntico ao original */}
       <header className="flex flex-col items-center text-center max-w-md pt-4 z-10">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-xs text-purple-200 font-medium mb-3">
-          <Sparkles className="w-3.5 h-3.5 text-purple-300" />
-          Finanças Pessoais & Imóveis na Planta
-        </div>
         <h1 className="text-3xl sm:text-4xl font-black tracking-widest text-white uppercase drop-shadow-md">
           QUITAFY
         </h1>
         <p className="mt-1 text-xs sm:text-sm text-white/70 max-w-xs font-normal">
-          Controle financeiro inteligente, extrato mês a mês e correção de imóveis pelo INCC
+          Controle financeiro inteligente e acompanhamento de imóveis na planta
         </p>
-
-        {/* Badges dos recursos principais */}
-        <div className="grid grid-cols-3 gap-2 mt-4 w-full">
-          <div className="bg-white/5 border border-white/10 rounded-xl p-2 flex flex-col items-center text-center">
-            <TrendingUp className="w-4 h-4 text-emerald-400 mb-1" />
-            <span className="text-[11px] font-medium text-white/90">Dashboard</span>
-            <span className="text-[10px] text-white/50">Donut visual</span>
-          </div>
-          <div className="bg-white/5 border border-white/10 rounded-xl p-2 flex flex-col items-center text-center">
-            <ShieldCheck className="w-4 h-4 text-purple-300 mb-1" />
-            <span className="text-[11px] font-medium text-white/90">Recorrentes</span>
-            <span className="text-[10px] text-white/50">VIP & Premium</span>
-          </div>
-          <div className="bg-white/5 border border-white/10 rounded-xl p-2 flex flex-col items-center text-center">
-            <Home className="w-4 h-4 text-amber-300 mb-1" />
-            <span className="text-[11px] font-medium text-white/90">Imóveis INCC</span>
-            <span className="text-[10px] text-white/50">Banco Central</span>
-          </div>
-        </div>
       </header>
 
       {/* Cartão de Login / Cadastro em tom suave #F4F1F9 */}
