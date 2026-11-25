@@ -70,6 +70,8 @@ export const authService = {
 
   logout(): void {
     pb.authStore.clear()
+    // Avisa o app (listener do authStore em AuthContext) que o usuário mudou.
+    pb.authStore.save('', { id: '', email: '', name: '', plan: 'free' } as never)
   },
 
   async refreshUser(): Promise<User | null> {
