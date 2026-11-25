@@ -37,7 +37,10 @@
  * secrets aparece duplicado (IIFE) dentro de cada callback pelo mesmo motivo.
  */
 
+console.log('[whatsapp_webhook] arquivo carregado — build v3 (' + new Date().toISOString() + ')')
+
 routerAdd('GET', '/backend/v1/whatsapp/webhook', (c) => {
+  console.log('[whatsapp_webhook] GET handler v3 em execução')
   try {
     const info = c.requestInfo()
     const mode = (info.query && info.query['hub.mode']) || ''

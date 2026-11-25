@@ -16,7 +16,42 @@
  * [signup_email], incluindo o erro/corpo da resposta quando houver.
  */
 
+console.log('[signup_email] arquivo carregado — build v3 (' + new Date().toISOString() + ')')
+
+// Rota canário: se ESTE arquivo está no ar, esta rota responde.
+routerAdd('GET', '/backend/v1/diag/signup_email', (c) => {
+  return c.json(200, {
+    arquivo: 'signup_email.pb.js',
+    build: 'v3',
+    hora: new Date().toISOString(),
+    mensagem: 'arquivo de boas-vindas está carregado nesta instância',
+  })
+})
+
+function diagGravar(fonte, detalhe) {
+  try {
+    const reg = new Record($app.findCollectionByNameOrId('diag_logs'))
+    reg.set('fonte', fonte)
+    reg.set('detalhe', detalhe)
+    $app.save(reg)
+  } catch (errDiag) {
+    console.error(
+      '[signup_email] falha ao gravar diag_logs: ' + ((errDiag && errDiag.message) || errDiag),
+    )
+  }
+}
+
+// O registro do hook vem PRIMEIRO no arquivo: qualquer exceção depois dele
+// não pode impedir o callback de ser registrado.
 $app.onRecordAfterCreateSuccess('users').add((e) => {
+  console.log('[signup_email] callback registrado disparou — build v5')
+  diagGravar(
+    'signup_email',
+    'callback tagged users disparou para ' +
+      e.record.getString('email') +
+      ' em ' +
+      new Date().toISOString(),
+  )
   const rec = e.record
   const email = String(rec.getString('email') || '').trim()
   if (!email) {
