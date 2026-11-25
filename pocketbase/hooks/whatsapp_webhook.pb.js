@@ -7,19 +7,20 @@
  *     secret WHATSAPP_VERIFY_TOKEN e devolve hub.challenge em texto puro.
  *   POST /backend/v1/whatsapp/webhook
  *     Recebe notificações de mensagens da Meta, resolve o usuário pelo número
- *     (coleção whatsapp_contas) e grava o movimento em transacoes:
- *       - despesa comum ("gastei 50 no uber");
- *       - despesa em CARTÃO ("comprei 300 de mercado no cartão nubank") — o
- *         nome do cartão é casado, tolerante a acento/caixa, com as contas do
- *         usuário; se citou cartão sem nome identificável, PERGUNTA qual;
- *       - RECEITA ("recebi 1000 de salário", "entrei 200 pix");
- *       - PARCELADA ("em 10x", "10x de 50" — mesma lógica de série do app:
- *         serie_id/parcela_numero/parcela_total, valor/N por mês);
- *       - RECORRENTE ("assinatura netflix 55 todo mês", "recorrente");
- *       - entrada vs. saída ambígua → o bot PERGUNTA antes de gravar.
- *     Perguntas ficam em whatsapp_pendencias (uma por número, expira em 1h);
- *     a resposta seguinte do mesmo número é interpretada como complemento,
- *     a menos que pareça um comando novo (tem valor → mensagem nova).
+ *     (coleção whatsapp_contas) e grava o movimento em transacoes.
+ *     Interpretação em DUAS camadas:
+ *       1) REGEX (rápida, barata): formatos óbvios ("gastei 50 no uber",
+ *          "recebi 1000 de salário", "em 10x", "todo mês");
+ *       2) AGENTE DE IA (nativo Skip Cloud, slug 'whatsapp-lancamentos'):
+ *          acionado quando o regex falha OU quando há menção a cartão que o
+ *          regex não reconheceu — devolve JSON {valor, tipo,
+ *          descricao_essencial, cartao_nome, parcelas, recorrente}.
+ *     O hook valida TUDO antes de gravar: plano (Prata/Ouro), valor, tipo e
+ *     cartão existente entre as contas do usuário. Cartão citado que não
+ *     bate com nenhum cadastro → PERGUNTA "Em qual cartão?" (intenção fica
+ *     em whatsapp_pendencias, expira em 1h, "cancelar" descarta).
+ *     Falha na chamada do agente (timeout/erro) → fallback total para o
+ *     comportamento antigo por regex, com o erro logado.
  *     RESTRIÇÃO DE PLANO: a interação pelo WhatsApp exige o plano Prata ou
  *     Ouro — nos demais (Básico/Bronze) a mensagem é LOGADA (nada é gravado em
  *     transacoes) e o bot responde explicando como ativar o Prata.
@@ -37,10 +38,10 @@
  * secrets aparece duplicado (IIFE) dentro de cada callback pelo mesmo motivo.
  */
 
-console.log('[whatsapp_webhook] arquivo carregado — build v3 (' + new Date().toISOString() + ')')
+console.log('[whatsapp_webhook] arquivo carregado — build v5 (agente IA + fallback regex)')
 
 routerAdd('GET', '/backend/v1/whatsapp/webhook', (c) => {
-  console.log('[whatsapp_webhook] GET handler v3 em execução')
+  console.log('[whatsapp_webhook] GET handler v4 em execução')
   try {
     const info = c.requestInfo()
     const mode = (info.query && info.query['hub.mode']) || ''
@@ -270,10 +271,30 @@ routerAdd('POST', '/backend/v1/whatsapp/webhook', (c) => {
     return null
   }
 
-  /** true quando o texto menciona um cartão sem dizer qual ("no cartão..."). */
-  function mencionaCartaoSemNome(texto) {
-    const t = semAcento(String(texto || '').toLowerCase())
-    return /(^|[^a-z])(no|na|pelo|pela|do|da|um|uma)\s+cartao(\s|$|,|\.|!|\?)/.test(t)
+  /**
+   * Cartão pelo NOME citado (devolvido pelo agente ou digitado na resposta da
+   * pendência): casamento bidirecional tolerante — "xp" acha "XP
+   * Investimentos" e "XP Investimentos" acha "xp". Só usar com nomes/trechos
+   * curtos, NUNCA com a mensagem inteira (casaria qualquer coisa).
+   */
+  function cartaoPorNome(userId, nome) {
+    const t = semAcento(String(nome || '').toLowerCase())
+      .replace(/[^a-z0-9 ]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+    if (!t) return null
+    let cartoes = []
+    try {
+      cartoes = $app.findRecordsByFilter('cartoes', `user_id = '${userId}'`, 'created', 50, 0)
+    } catch (_) {
+      return null
+    }
+    for (const cartao of cartoes) {
+      const chave = nomeCartaoNormalizado(cartao.getString('nome'))
+      if (!chave) continue
+      if (chave === t || chave.indexOf(t) !== -1 || t.indexOf(chave) !== -1) return cartao
+    }
+    return null
   }
 
   /** Interpreta o texto: valor, tipo (despesa/receita/duvida), parcelas, recorrente. */
@@ -356,6 +377,154 @@ routerAdd('POST', '/backend/v1/whatsapp/webhook', (c) => {
     return d.substring(0, 120)
   }
 
+  /**
+   * Chama o agente nativo Skip Cloud ('whatsapp-lancamentos') e devolve a
+   * intenção normalizada {valor, tipo, descricao_essencial, cartao_nome,
+   * parcelas, recorrente} ou {erro} quando não é um lançamento. A lista de
+   * cartões vai no prompt (chave "cartoes_disponiveis") para o agente casar
+   * o nome citado com o cadastro real. Erros de runtime/config são LOGADOS e
+   * devolvidos como {erro:'falha_agente'} — o chamador cai no fallback regex.
+   */
+  function interpretarComAgente(texto, nomesCartoes) {
+    const prompt =
+      'Mensagem do usuário: ' +
+      JSON.stringify(String(texto || '')) +
+      '\n' +
+      'cartoes_disponiveis: ' +
+      JSON.stringify(nomesCartoes || [])
+    let resposta = ''
+    try {
+      const result = $ai.agent('whatsapp-lancamentos').chat({
+        user_id: null, // agente stateless de classificação — sem histórico
+        message: prompt,
+      })
+      resposta = String((result && result.content) || '')
+      if (!resposta) {
+        let visto = ''
+        try {
+          visto = JSON.stringify(result)
+        } catch (_) {
+          visto = '(não serializável)'
+        }
+        console.error('[whatsapp_webhook] agente devolveu resultado sem content:', visto)
+      }
+    } catch (err) {
+      console.error(
+        '[whatsapp_webhook] chamada ao agente de IA falhou:',
+        (err && err.message) || err,
+      )
+      return { erro: 'falha_agente' }
+    }
+
+    console.log('[whatsapp_webhook] resposta do agente:', resposta)
+
+    let parsed = null
+    try {
+      parsed = JSON.parse(resposta)
+    } catch (_) {
+      // Modelo pode embrulhar o JSON em texto/markdown: extraio o primeiro {...}.
+      const inicio = resposta.indexOf('{')
+      const fim = resposta.lastIndexOf('}')
+      if (inicio !== -1 && fim > inicio) {
+        try {
+          parsed = JSON.parse(resposta.substring(inicio, fim + 1))
+        } catch (_) {}
+      }
+    }
+    if (!parsed || typeof parsed !== 'object') {
+      console.error('[whatsapp_webhook] agente não devolveu JSON válido:', resposta)
+      return { erro: 'falha_agente' }
+    }
+    if (parsed.erro) {
+      console.log('[whatsapp_webhook] agente indicou erro:', parsed.erro)
+      return { erro: String(parsed.erro) }
+    }
+
+    const valor = Number(parsed.valor)
+    const parcelasRaw = Number(parsed.parcelas)
+    const intento = {
+      valor: isFinite(valor) && valor > 0 ? valor : 0,
+      tipo: parsed.tipo === 'entrada' ? 'receita' : parsed.tipo === 'saida' ? 'despesa' : '',
+      descricao_essencial: String(parsed.descricao_essencial || '')
+        .trim()
+        .substring(0, 120),
+      cartao_nome: parsed.cartao_nome ? String(parsed.cartao_nome).trim() : '',
+      parcelas:
+        isFinite(parcelasRaw) && parcelasRaw >= 2 && parcelasRaw <= MAX_PARCELAS ? parcelasRaw : 0,
+      recorrente: parsed.recorrente === true,
+    }
+    if (!intento.valor || !intento.tipo) {
+      console.error('[whatsapp_webhook] agente devolveu valor/tipo inválidos:', resposta)
+      return { erro: 'resposta_invalida' }
+    }
+    return intento
+  }
+
+  /**
+   * Interpretação completa: tenta o regex; se falhar OU se houver menção a
+   * cartão (para deixar a IA casar o nome), chama o agente. Se o agente
+   * também falhar, cai de volta no regex puro (fallback total).
+   */
+  function interpretarMensagem(usuario, msg) {
+    const texto = String(msg.texto || '')
+    const interpretado = interpretarTexto(texto)
+
+    // Regex não extraiu tudo (sem valor/tipo) OU o texto menciona cartão
+    // (a palavra "cartão" OU o nome de um cartão cadastrado): dou a chance ao
+    // agente de casar o cartão e devolver a descrição essencial limpa
+    // (inclui "com cartão xp", "no nubank" etc.).
+    const semTipo = !interpretado || interpretado.tipo === 'duvida'
+    const falaDeCartao =
+      /\bcartao\b/.test(semAcento(texto.toLowerCase())) || !!cartaoPorTexto(usuario.id, texto)
+    if (!semTipo && !falaDeCartao) return interpretado
+
+    console.log('[whatsapp_webhook] regex insuficiente, aciono agente IA:', texto)
+
+    let nomes = []
+    try {
+      nomes = $app
+        .findRecordsByFilter('cartoes', `user_id = '${usuario.id}'`, 'created', 50, 0)
+        .map(function (r) {
+          return r.getString('nome')
+        })
+    } catch (_) {
+      nomes = []
+    }
+
+    const intento = interpretarComAgente(texto, nomes)
+    if (intento.erro) {
+      if (intento.erro === 'sem_valor' || intento.erro === 'nao_lancamento') {
+        console.log('[whatsapp_webhook] agente disse que não é lançamento:', intento.erro)
+        return null
+      }
+      console.error('[whatsapp_webhook] fallback para regex puro (agente falhou):', intento.erro)
+      return interpretado
+    }
+
+    // Sucesso: resolvo o cartão pelo NOME que o agente devolveu (não pelo
+    // texto bruto) e gravo a descrição LIMPA retornada pelo agente.
+    msg.descricaoFinal = intento.descricao_essencial || descrever(texto)
+    let cartaoAgente = null
+    if (intento.cartao_nome) {
+      cartaoAgente =
+        cartaoPorTexto(usuario.id, intento.cartao_nome) ||
+        cartaoPorNome(usuario.id, intento.cartao_nome)
+      if (!cartaoAgente) {
+        // Cartão citado não existe no cadastro do usuário → pendência.
+        console.log('[whatsapp_webhook] cartão do agente não bate:', intento.cartao_nome)
+        msg.cartaoNaoEncontrado = intento.cartao_nome
+      }
+    }
+    msg.cartaoDoAgente = cartaoAgente
+    return {
+      valor: intento.valor,
+      tipo: intento.tipo,
+      parcelas: intento.parcelas,
+      recorrente: intento.recorrente,
+      viaAgente: true,
+    }
+  }
+
   /** Extrai a primeira mensagem de texto do payload da Meta. */
   function extrairMensagem(payload) {
     try {
@@ -402,13 +571,14 @@ routerAdd('POST', '/backend/v1/whatsapp/webhook', (c) => {
    * série com a MESMA lógica do app (uma transação por mês, valor/N,
    * serie_id/parcela_numero/parcela_total); recorrente grava com
    * recorrente=true e recorrencia_periodo='mensal' (a réplica virtual dos
-   * meses seguintes é feita na leitura pelo extrato).
+   * meses seguintes é feita na leitura pelo extrato). descricaoOverride é a
+   * descrição LIMPA vinda do agente (só a essência, ex. "mercado").
    */
-  function gravarTransacao(usuario, texto, intento, cartao) {
+  function gravarTransacao(usuario, texto, intento, cartao, descricaoOverride) {
     const hoje = new Date().toISOString().replace('T', ' ').substring(0, 19) + 'Z'
     const transacao = new Record($app.findCollectionByNameOrId('transacoes'))
     transacao.set('user_id', usuario.id)
-    transacao.set('descricao', descrever(texto))
+    transacao.set('descricao', descricaoOverride || descrever(texto))
     transacao.set('valor', intento.parcelas > 1 ? intento.valor / intento.parcelas : intento.valor)
     transacao.set('tipo', intento.tipo)
     transacao.set('data', hoje)
@@ -661,7 +831,7 @@ routerAdd('POST', '/backend/v1/whatsapp/webhook', (c) => {
       )
 
       if (aguardando === 'cartao') {
-        const cartao = cartaoPorTexto(usuario.id, msg.texto)
+        const cartao = cartaoPorTexto(usuario.id, msg.texto) || cartaoPorNome(usuario.id, msg.texto)
         if (cartao) {
           limparPendencia(msg.from)
           registrarMensagem(msg, usuario.id, 'processada', '')
@@ -714,11 +884,11 @@ routerAdd('POST', '/backend/v1/whatsapp/webhook', (c) => {
     }
 
     // ---- mensagem nova ----
-    return processarNovaMensagem(usuario, msg, interpretarTexto(msg.texto))
+    return processarNovaMensagem(usuario, msg, interpretarMensagem(usuario, msg))
 
     /**
-     * Trata uma mensagem nova (não é resposta a pendência): interpreta,
-     * valida e grava ou pergunta.
+     * Trata uma mensagem nova (não é resposta a pendência): interpreta
+     * (regex → agente IA → fallback regex), valida e grava ou pergunta.
      */
     function processarNovaMensagem(usuario, msg, interpretado) {
       if (!interpretado) {
@@ -750,27 +920,50 @@ routerAdd('POST', '/backend/v1/whatsapp/webhook', (c) => {
         return c.json(200, { received: true, pendente: true })
       }
 
-      // "no cartão" sem nome identificável: PERGUNTO qual.
-      let cartao = null
-      let citouCartao = false
-      if (interpretado.tipo === 'despesa' && mencionaCartaoSemNome(msg.texto)) {
-        citouCartao = true
-        cartao = cartaoPorTexto(usuario.id, msg.texto)
-        if (!cartao) {
-          console.log('[whatsapp_webhook] cartão citado sem nome, pergunto:', msg.texto)
-          salvarPendencia(msg.from, usuario.id, 'cartao', {
-            valor: interpretado.valor,
-            parcelas: interpretado.parcelas,
-            recorrente: interpretado.recorrente,
-            descricao: descrever(msg.texto),
-          })
-          registrarMensagem(msg, usuario.id, 'pendente', '')
-          responderWhatsApp(
-            msg.from,
-            '❓ Em qual cartão? Responda com o nome dele (ex.: "nubank", "inter").',
-          )
-          return c.json(200, { received: true, pendente: true })
-        }
+      // Cartão citado que o agente não conseguiu casar com o cadastro.
+      if (msg && msg.cartaoNaoEncontrado) {
+        console.log(
+          '[whatsapp_webhook] cartão citado não existe, pergunto:',
+          msg.cartaoNaoEncontrado,
+        )
+        salvarPendencia(msg.from, usuario.id, 'cartao', {
+          valor: interpretado.valor,
+          parcelas: interpretado.parcelas,
+          recorrente: interpretado.recorrente,
+          descricao: msg.descricaoFinal || descrever(msg.texto),
+        })
+        registrarMensagem(msg, usuario.id, 'pendente', '')
+        responderWhatsApp(
+          msg.from,
+          '❓ Em qual cartão? Responda com o nome dele (ex.: "nubank", "inter").',
+        )
+        return c.json(200, { received: true, pendente: true })
+      }
+
+      // Cartão ainda não resolvido (o agente não casou nada ou não rodou):
+      // tento casar pelo texto; se a mensagem menciona cartão e nada casou,
+      // PERGUNTO qual — nada é gravado sem resposta.
+      let cartao = msg && msg.cartaoDoAgente ? msg.cartaoDoAgente : null
+      const falaDeCartao =
+        interpretado.tipo === 'despesa' &&
+        /\bcartao\b/.test(semAcento(String(msg.texto || '').toLowerCase()))
+      if (!cartao && falaDeCartao) {
+        cartao = cartaoPorTexto(usuario.id, msg.texto) || cartaoPorNome(usuario.id, msg.texto)
+      }
+      if (!cartao && falaDeCartao) {
+        console.log('[whatsapp_webhook] cartão citado não casou, pergunto:', msg.texto)
+        salvarPendencia(msg.from, usuario.id, 'cartao', {
+          valor: interpretado.valor,
+          parcelas: interpretado.parcelas,
+          recorrente: interpretado.recorrente,
+          descricao: msg.descricaoFinal || descrever(msg.texto),
+        })
+        registrarMensagem(msg, usuario.id, 'pendente', '')
+        responderWhatsApp(
+          msg.from,
+          '❓ Em qual cartão? Responda com o nome dele (ex.: "nubank", "inter").',
+        )
+        return c.json(200, { received: true, pendente: true })
       }
 
       return concluirCadastro(
@@ -781,7 +974,7 @@ routerAdd('POST', '/backend/v1/whatsapp/webhook', (c) => {
           tipo: interpretado.tipo,
           parcelas: interpretado.parcelas,
           recorrente: interpretado.recorrente,
-          descricao: descrever(msg.texto),
+          descricao: msg.descricaoFinal || descrever(msg.texto),
         },
         cartao,
       )
@@ -819,7 +1012,7 @@ routerAdd('POST', '/backend/v1/whatsapp/webhook', (c) => {
 
       let transacao = null
       try {
-        transacao = gravarTransacao(usuario, msg.texto, intento, cartao)
+        transacao = gravarTransacao(usuario, msg.texto, intento, cartao, dados.descricao)
         if (intento.parcelas > 1) {
           criarParcelasSeguintes(usuario, msg.texto, intento, cartao, transacao)
         }
@@ -883,4 +1076,54 @@ routerAdd('POST', '/backend/v1/whatsapp/webhook', (c) => {
     console.error('[whatsapp_webhook] erro no POST do webhook:', (err && err.message) || err)
     return c.json(200, { received: true, erro: true })
   }
+})
+
+/**
+ * TEMPORÁRIO (teste de integração, remover após validar): rota de loopback que
+ * alimenta o webhook com o MESMO payload da Meta, sem passar pelo WhatsApp.
+ * Aceita ?texto=...&numero=<número vinculado em whatsapp_contas> e devolve o
+ * JSON de decisão da rota real. Não grava nada além do que o próprio webhook
+ * gravaria (transações/mensagens/pendências reais — limpar depois no painel).
+ */
+routerAdd('GET', '/backend/v1/whatsapp/teste', (c) => {
+  const info = c.requestInfo()
+  const texto = String((info.query && info.query['texto']) || '')
+  const numero = String((info.query && info.query['numero']) || '')
+  if (!texto || !numero) {
+    return c.json(400, { error: 'informe ?texto=...&numero=...' })
+  }
+  const payload = {
+    entry: [
+      {
+        changes: [
+          {
+            value: {
+              messages: [
+                {
+                  id: 'teste_' + $security.randomString(10),
+                  from: numero,
+                  text: { body: texto },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    ],
+  }
+  const req = new Request({
+    url: 'http://loopback.internal/teste',
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+  req.headers.set('Content-Type', 'application/json')
+  const resp = $app.router().serve(req)
+  let corpo = ''
+  try {
+    corpo = String(resp.body())
+  } catch (_) {
+    corpo = '(corpo ilegível)'
+  }
+  console.log('[whatsapp_teste] loopback:', texto, '→', corpo)
+  return c.json(200, { texto: texto, webhook: corpo })
 })
