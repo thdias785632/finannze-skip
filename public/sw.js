@@ -1,7 +1,7 @@
 /* Service worker do Quitafy: cache offline do shell e dos assets.
  * Nova versão: instala e assume o controle imediatamente; a página recarrega
  * (ver src/lib/pwa.ts), então o usuário recebe a versão publicada. */
-const CACHE = 'quitafy-cache-v1'
+const CACHE = 'quitafy-cache-v2'
 const SHELL = ['/']
 
 self.addEventListener('install', (event) => {

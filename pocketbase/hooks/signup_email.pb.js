@@ -25,7 +25,7 @@ $app.onRecordAfterCreateSuccess('users').add((e) => {
   }
   const nome = String(rec.getString('name') || '').trim() || email.split('@')[0]
 
-  console.log('[signup_email] preparando e-mail de boas-vindas para', email)
+  console.log('[signup_email] hook carregado — preparando e-mail de boas-vindas para', email)
 
   const html = [
     '<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#1F1438;max-width:560px;margin:0 auto;padding:24px;">',
