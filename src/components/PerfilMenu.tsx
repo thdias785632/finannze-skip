@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { UserRound, LogOut, MessageCircle, Pencil, Crown } from 'lucide-react'
+import { UserRound, LogOut, MessageCircle, Pencil, Crown, GraduationCap } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -84,6 +84,10 @@ export const PerfilMenu: React.FC = () => {
           <DropdownMenuItem onSelect={() => setDialogEditar(true)}>
             <Pencil className="mr-2 h-4 w-4" />
             Editar perfil
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => navigate('/tutorial')}>
+            <GraduationCap className="mr-2 h-4 w-4" />
+            Tutorial
           </DropdownMenuItem>
           {urlContato ? (
             <DropdownMenuItem asChild>

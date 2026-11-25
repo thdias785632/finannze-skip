@@ -46,6 +46,97 @@ routerAdd('POST', '/backend/v1/auth/registrar', (c) => {
    * HTML + texto puro com os planos Básico / Bronze / Prata / Ouro. Best-effort.
    */
   function enviarBoasVindas(email, nome) {
+    // Guia do plano Básico (espelha src/lib/tutorial.ts — fonte única no front;
+    // aqui no e-mail é reproduzido em HTML/texto porque a JSVM não lê o front).
+    const secoesBasicas = [
+      {
+        titulo: 'Instale o Quitafy na tela inicial do celular',
+        itens: [
+          'Android (Chrome): toque no menu ⋮ do navegador, toque em "Adicionar à tela inicial" e confirme em "Instalar" ou "Adicionar".',
+          'iPhone/iPad (Safari): toque no botão de compartilhar (o quadrado com seta para cima), toque em "Adicionar à Tela de Início" e confirme em "Adicionar".',
+          'Pronto: o ícone do Quitafy aparece junto dos seus apps e abre em tela cheia, como qualquer aplicativo.',
+        ],
+      },
+      {
+        titulo: 'Início — seu resumo do mês',
+        itens: [
+          'O cartão roxo no topo traz o saldo do mês: receitas, despesas e o resultado.',
+          'O gráfico de donut mostra quanto você gastou em cada categoria; toque numa fatia para ver os lançamentos daquela categoria.',
+          'Os cartões abaixo listam os gastos principais do mês, com valor e porcentagem.',
+          'Use a barra inferior (Início, Extrato, +, Cartões, Grupos) para navegar entre as telas.',
+        ],
+      },
+      {
+        titulo: 'Nova transação — registre receitas e despesas',
+        itens: [
+          'Escolha se é entrada (receita) ou saída (despesa) e digite o valor.',
+          'Selecione a categoria (moradia, alimentação, transporte...) e a data.',
+          'Em "Mais detalhes" você pode vincular a um cartão de crédito ou dividir a despesa num grupo compartilhado.',
+          'Toque em "Salvar" — o lançamento aparece na hora no Início e no Extrato.',
+        ],
+      },
+      {
+        titulo: 'Extrato — todo o histórico mês a mês',
+        itens: [
+          'Navegue entre os meses com as setas; o resumo do topo muda junto.',
+          'Use o filtro para ver só receitas, só despesas ou uma categoria específica.',
+          'Toque num lançamento para editar ou excluir.',
+          'No menu do mês você exporta o extrato em PDF para guardar ou enviar.',
+          'Meses futuros (previsão de fluxo) são um recurso do plano Bronze.',
+        ],
+      },
+      {
+        titulo: 'Cartões — controle de fatura',
+        itens: [
+          'Toque em "Cartões" na barra inferior e depois em "Adicionar cartão".',
+          'Informe nome, bandeira, dia de fechamento e vencimento.',
+          'Ao lançar uma despesa, escolha o cartão e a fatura dele é atualizada sozinha.',
+          'Na tela do cartão você vê o total da fatura e cada compra que a compõe.',
+        ],
+      },
+      {
+        titulo: 'Grupos compartilhados — divida com quem vive com você',
+        itens: [
+          'Crie um grupo em "Grupos" e convide as pessoas por e-mail.',
+          'Cada lançamento do grupo pode indicar quem pagou e como o valor é dividido entre os membros (igual, por valor ou por porcentagem).',
+          'A tela do grupo resume o saldo de cada pessoa: quem deve e quem tem a receber.',
+          'Os lançamentos do grupo também aparecem no Extrato de quem participou.',
+        ],
+      },
+      {
+        titulo: 'Perfil — sua conta, plano e contato',
+        itens: [
+          'Toque na sua foto no header para abrir o menu do perfil.',
+          '"Editar perfil" permite mudar nome, telefone e foto.',
+          '"Tutorial" abre este guia, sempre atualizado com o seu plano.',
+          '"Planos" mostra o que cada plano inclui e os preços.',
+          '"Contato" abre o WhatsApp do suporte (quando disponível) e "Sair" encerra a sessão.',
+        ],
+      },
+    ]
+
+    const htmlGuia = secoesBasicas
+      .map(function (secao, i) {
+        const itens = secao.itens
+          .map(function (item) {
+            return '<li style="margin:0 0 6px;">' + item + '</li>'
+          })
+          .join('')
+        return (
+          '<li style="margin:0 0 14px;">' +
+          '<strong style="font-size:14px;">' +
+          (i + 1) +
+          '. ' +
+          secao.titulo +
+          '</strong>' +
+          '<ul style="font-size:13px;line-height:1.6;margin:6px 0 0;padding-left:18px;color:#4B5563;">' +
+          itens +
+          '</ul>' +
+          '</li>'
+        )
+      })
+      .join('')
+
     const html = [
       '<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#1F1438;max-width:560px;margin:0 auto;padding:24px;">',
       '  <h1 style="font-size:20px;margin:0 0 16px;">🎉 Bem-vindo(a) ao Quitafy, ' +
@@ -66,9 +157,35 @@ routerAdd('POST', '/backend/v1/auth/registrar', (c) => {
       '  <p style="font-size:14px;line-height:1.6;margin:0 0 16px;">',
       '    As informações e preços ficam na seção de <strong>Planos</strong>, dentro do app.',
       '  </p>',
+      '  <h2 style="font-size:16px;margin:0 0 10px;">📖 Guia rápido do Básico</h2>',
+      '  <p style="font-size:13px;line-height:1.6;margin:0 0 12px;color:#4B5563;">',
+      '    Comece por aqui: instale o app na tela inicial e aprenda a usar cada tela.',
+      '    No menu da sua foto, o item <strong>Tutorial</strong> traz o guia completo,',
+      '    atualizado com o seu plano.',
+      '  </p>',
+      '  <ul style="font-size:14px;line-height:1.7;margin:0 0 16px;padding-left:20px;">' +
+        htmlGuia +
+        '</ul>',
       '  <p style="font-size:12px;color:#6B7280;margin:0;">Equipe Quitafy</p>',
       '</div>',
     ].join('')
+
+    const linhasGuia = secoesBasicas
+      .map(function (secao, i) {
+        return (
+          i +
+          1 +
+          '. ' +
+          secao.titulo +
+          '\n' +
+          secao.itens
+            .map(function (item) {
+              return '   - ' + item
+            })
+            .join('\n')
+        )
+      })
+      .join('\n\n')
 
     const texto = [
       'Bem-vindo(a) ao Quitafy, ' + nome + '!',
@@ -79,6 +196,11 @@ routerAdd('POST', '/backend/v1/auth/registrar', (c) => {
       '- Ouro — R$ 29,99/mês: tudo do Prata + módulo de imóveis na planta com correção pelo INCC.',
       '',
       'As informações e preços ficam na seção de Planos, dentro do app.',
+      '',
+      '📖 Guia rápido do Básico:',
+      linhasGuia,
+      '',
+      'No menu da sua foto, o item Tutorial traz o guia completo, atualizado com o seu plano.',
       '',
       'Equipe Quitafy',
     ].join('\n')

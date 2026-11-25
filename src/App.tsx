@@ -14,6 +14,7 @@ import { ImovelDetalhe } from '@/pages/imoveis/ImovelDetalhe'
 import { NewTransactionPage } from '@/pages/NewTransaction'
 import { EditarTransacaoPage } from '@/pages/EditarTransacao'
 import { BoasVindas, consumirBoasVindasPendentes } from '@/pages/BoasVindas'
+import { TutorialPage } from '@/pages/Tutorial'
 import NotFound from '@/pages/NotFound'
 
 const App: React.FC = () => {
@@ -31,6 +32,7 @@ const App: React.FC = () => {
             <Route path="/imoveis" element={<ImoveisLista />} />
             <Route path="/imoveis/:id" element={<ImovelDetalhe />} />
             <Route path="/planos" element={<PlansPage />} />
+            <Route path="/tutorial" element={<TutorialPage />} />
             <Route path="/nova-transacao" element={<NewTransactionPage />} />
             <Route path="/editar-transacao/:id" element={<EditarTransacaoPage />} />
             <Route

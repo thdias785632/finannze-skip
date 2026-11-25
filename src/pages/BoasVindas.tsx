@@ -9,8 +9,10 @@ import {
   MessageCircle,
   Building2,
   Sparkles,
+  GraduationCap,
 } from 'lucide-react'
 import { PLANOS } from '@/lib/planos'
+import { secoesBasicas } from '@/lib/tutorial'
 import { useAuth } from '@/context/AuthContext'
 import { AppHeader } from '@/components/AppHeader'
 import { BottomNav } from '@/components/BottomNav'
@@ -127,6 +129,37 @@ export const BoasVindas: React.FC = () => {
           Ativação dos planos Bronze, Prata e Ouro feita pelo administrador — sem cobrança
           automática no app.
         </p>
+
+        <h2 className="mt-8 mb-3 flex items-center gap-2 text-lg font-bold text-[#1F1235]">
+          <GraduationCap className="w-5 h-5 text-[#6639A6]" /> Guia rápido do Básico
+        </h2>
+        <p className="mb-4 text-xs text-gray-500 leading-relaxed">
+          Comece por aqui: instale o app na tela inicial e aprenda a usar cada tela. Quando o seu
+          plano mudar, o Tutorial (no menu da sua foto) mostra o guia completo.
+        </p>
+
+        <div className="space-y-4">
+          {secoesBasicas().map((secao) => (
+            <div
+              key={secao.id}
+              className="rounded-3xl border border-[#E2D6F0] bg-white p-5 shadow-sm"
+            >
+              <div className="flex items-start gap-2">
+                <GraduationCap className="w-4 h-4 mt-1 text-[#6639A6] shrink-0" />
+                <h3 className="text-sm font-black text-[#1F1438] leading-snug">{secao.titulo}</h3>
+              </div>
+              <p className="mt-1.5 text-xs text-gray-500 leading-relaxed">{secao.descricao}</p>
+              <ul className="mt-3 space-y-2">
+                {secao.itens.map((item, i) => (
+                  <li key={i} className="flex items-start gap-2">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <span className="text-xs leading-relaxed text-[#1F1438]">{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
 
         <button
           type="button"
