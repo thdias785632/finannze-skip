@@ -150,7 +150,7 @@ export const SECOES_TUTORIAL: SecaoTutorial[] = [
       'Escreva do jeito que você fala: "gastei 50 no uber", "paguei a faculdade 350" ou "recebi 1200 de freela".',
       'O bot confirma o que entendeu e pergunta o que falta antes de gravar (cartão, entrada ou saída).',
       'Funciona com despesas simples, em cartão, parceladas e recorrentes — e também com receitas.',
-      'O número do WhatsApp do Quitafy fica na tela Planos, na descrição do plano Prata.',
+      'O número do WhatsApp do Quitafy fica no menu do Usuário, clicando no seu icone e no item "Contato".',
     ],
   },
   // ---------------- Ouro ----------------
