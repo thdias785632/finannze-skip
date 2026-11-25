@@ -39,17 +39,32 @@ export const authService = {
   },
 
   async signup(name: string, email: string, pass: string, telefone: string): Promise<User> {
-    // Cria novo usuário (nasce no plano 'free', com telefone com DDI)
-    await pb.collection('users').create({
-      email,
-      password: pass,
-      passwordConfirm: pass,
-      name,
-      telefone,
-      plan: 'free',
-    })
+    // O cadastro acontece na ROTA DO BACKEND POST /backend/v1/auth/registrar
+    // (pb_hooks/auth_registrar.pb.js): cria o usuário no plano 'free' e envia
+    // o e-mail de boas-vindas INLINE — nesta instância Skip Cloud callbacks
+    // onRecordAfterCreateSuccess não executam (bug comprovado), então nada
+    // aqui depende de hook de evento.
+    const resp = await fetch(
+      `${import.meta.env.VITE_POCKETBASE_URL.replace(/\/$/, '')}/backend/v1/auth/registrar`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nome: name, email, senha: pass, telefone }),
+      },
+    )
 
-    // Autentica logo em seguida
+    let corpo: { user?: { id?: string; plan?: string }; error?: string } = {}
+    try {
+      corpo = await resp.json()
+    } catch {
+      corpo = {}
+    }
+
+    if (!resp.ok) {
+      throw new Error(corpo.error || 'Falha ao criar conta. Tente novamente.')
+    }
+
+    // Autentica logo em seguida (endpoint padrão do PocketBase, sem mudanças)
     return this.login(email, pass)
   },
 
