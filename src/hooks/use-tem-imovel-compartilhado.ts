@@ -14,10 +14,10 @@ let cache: boolean | null = null
 
 export const useTemImovelCompartilhado = (): boolean => {
   const { user, plan } = useAuth()
-  const [tem, setTem] = useState<boolean>(plan === 'premium' || cache === true)
+  const [tem, setTem] = useState<boolean>(plan === 'ouro' || cache === true)
 
   useEffect(() => {
-    if (plan === 'premium') {
+    if (plan === 'ouro') {
       setTem(true)
       return
     }

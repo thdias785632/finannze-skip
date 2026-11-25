@@ -1,9 +1,14 @@
 import type { UserPlan } from '@/types/financial'
 
 /**
- * Configuração única dos planos do Quitafy, usada pela tela de Planos,
- * pelo texto do template de boas-vindas do WhatsApp (hook de cadastro) e
- * por qualquer surface futura.
+ * Configuração única dos planos do Quitafy, usada pela tela de Planos, pela
+ * tela de boas-vindas, pela AuthScreen e por qualquer surface futura.
+ *
+ * Hierarquia (cada plano inclui tudo do anterior):
+ *   Básico (gratuito) → Bronze R$ 14,99 → Prata R$ 24,99 → Ouro R$ 29,99
+ *   - Bronze: despesas recorrentes + extratos de todos os meses (inclusive futuros)
+ *   - Prata:  tudo do Bronze + lançamentos pelo WhatsApp
+ *   - Ouro:   tudo do Prata + imóveis na planta com correção INCC
  */
 export interface BeneficioPlano {
   title: string
@@ -22,10 +27,16 @@ export interface PlanoConfig {
   features: BeneficioPlano[]
 }
 
+/** Helper: o plano atual é bronze, prata ou ouro? */
+export const planoAbaixoDe = (plan: UserPlan, minimo: UserPlan): boolean => {
+  const ordem: UserPlan[] = ['basico', 'bronze', 'prata', 'ouro']
+  return ordem.indexOf(plan) < ordem.indexOf(minimo)
+}
+
 export const PLANOS: PlanoConfig[] = [
   {
-    id: 'free',
-    name: 'Free',
+    id: 'basico',
+    name: 'Básico',
     tagline: 'O essencial para suas finanças',
     price: 'Grátis',
     color: 'border-gray-200 bg-white',
@@ -34,57 +45,90 @@ export const PLANOS: PlanoConfig[] = [
       { title: 'Cartões de crédito com controle de fatura', included: true },
       { title: 'Categorias e gráfico de donut animado', included: true },
       { title: 'Extrato do mês atual e passados', included: true },
-      { title: 'Despesas recorrentes fixas', included: false, reason: 'Apenas VIP e Premium' },
+      {
+        title: 'Grupos compartilhados de despesas: divida lançamentos com família e amigos',
+        included: true,
+      },
+      {
+        title: 'Divisão por membro, com quem pagou e valores por pessoa',
+        included: true,
+      },
+      { title: 'Despesas recorrentes fixas', included: false, reason: 'A partir do Bronze' },
       {
         title: 'Extrato e previsão de meses futuros',
         included: false,
-        reason: 'Apenas VIP e Premium',
+        reason: 'A partir do Bronze',
       },
+      { title: 'Lançamentos pelo WhatsApp', included: false, reason: 'A partir do Prata' },
       {
         title: 'Módulo de Imóveis na planta (INCC)',
         included: false,
-        reason: 'Exclusivo do Premium',
+        reason: 'Exclusivo do Ouro',
       },
-      { title: 'Interação pelo WhatsApp', included: false, reason: 'Exclusivo do Premium' },
     ],
   },
   {
-    id: 'vip',
-    name: 'VIP',
+    id: 'bronze',
+    name: 'Bronze',
     tagline: 'Previsibilidade e despesas recorrentes',
     price: 'R$ 14,99',
     period: '/mês',
     popular: true,
     color: 'border-[#6639A6] bg-purple-50/40 shadow-md',
     features: [
-      { title: 'Tudo incluso no plano Free', included: true },
+      { title: 'Tudo incluso no plano Básico', included: true },
       { title: 'Despesas e receitas recorrentes automáticas', included: true },
       { title: 'Visualização de extratos de meses futuros', included: true },
       { title: 'Previsão de fluxo de caixa', included: true },
+      { title: 'Lançamentos pelo WhatsApp', included: false, reason: 'A partir do Prata' },
       {
         title: 'Módulo de Imóveis na planta (INCC)',
         included: false,
-        reason: 'Exclusivo do Premium',
+        reason: 'Exclusivo do Ouro',
       },
-      { title: 'Interação pelo WhatsApp', included: false, reason: 'Exclusivo do Premium' },
     ],
   },
   {
-    id: 'premium',
-    name: 'Premium',
-    tagline: 'Controle total com imóveis e WhatsApp',
-    price: 'R$ 29,90',
+    id: 'prata',
+    name: 'Prata',
+    tagline: 'Lance tudo pelo WhatsApp, sem abrir o app',
+    price: 'R$ 24,99',
+    period: '/mês',
+    color: 'border-slate-400 bg-gradient-to-b from-slate-50/60 to-white shadow-md',
+    features: [
+      { title: 'Tudo incluso nos planos Básico e Bronze', included: true },
+      {
+        title: 'Lançamentos pelo WhatsApp: "gastei 50 no uber" e pronto',
+        included: true,
+      },
+      {
+        title: 'Despesas em cartão, parceladas, recorrentes e receitas por mensagem',
+        included: true,
+      },
+      {
+        title: 'O bot pergunta o que falta (cartão, entrada ou saída) antes de gravar',
+        included: true,
+      },
+      {
+        title: 'Módulo de Imóveis na planta (INCC)',
+        included: false,
+        reason: 'Exclusivo do Ouro',
+      },
+    ],
+  },
+  {
+    id: 'ouro',
+    name: 'Ouro',
+    tagline: 'Controle total com imóveis na planta',
+    price: 'R$ 29,99',
     period: '/mês',
     color: 'border-amber-400 bg-gradient-to-b from-amber-50/50 to-white shadow-lg',
     features: [
-      { title: 'Tudo incluso nos planos Free e VIP', included: true },
+      { title: 'Tudo incluso nos planos Básico, Bronze e Prata', included: true },
       { title: 'Módulo exclusivo de Imóveis na planta', included: true },
       { title: 'Correção pelo INCC oficial do Banco Central (SGS 192)', included: true },
       { title: 'Cálculo de defasagem e mês-base contratual', included: true },
-      {
-        title: 'Interação pelo WhatsApp: lance despesas e entradas mandando mensagem',
-        included: true,
-      },
+      { title: 'Fluxo de pagamento, parcelas e saldo a pagar por imóvel', included: true },
       { title: 'Prioridade em novos recursos do Quitafy', included: true },
     ],
   },

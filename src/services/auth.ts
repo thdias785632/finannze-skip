@@ -11,7 +11,7 @@ export const authService = {
       id: rec.id,
       email: rec.email,
       name: (rec.name as string) || (rec.email ? rec.email.split('@')[0] : 'Usuário'),
-      plan: (rec.plan as UserPlan) || 'free',
+      plan: (rec.plan as UserPlan) || 'basico',
       telefone: (rec.telefone as string) || undefined,
       avatar: rec.avatar as string | undefined,
       created: rec.created,
@@ -30,7 +30,7 @@ export const authService = {
       id: rec.id,
       email: rec.email,
       name: (rec.name as string) || (rec.email ? rec.email.split('@')[0] : 'Usuário'),
-      plan: (rec.plan as UserPlan) || 'free',
+      plan: (rec.plan as UserPlan) || 'basico',
       telefone: (rec.telefone as string) || undefined,
       avatar: rec.avatar as string | undefined,
       created: rec.created,
@@ -40,7 +40,7 @@ export const authService = {
 
   async signup(name: string, email: string, pass: string, telefone: string): Promise<User> {
     // O cadastro acontece na ROTA DO BACKEND POST /backend/v1/auth/registrar
-    // (pb_hooks/auth_registrar.pb.js): cria o usuário no plano 'free' e envia
+    // (pb_hooks/auth_registrar.pb.js): cria o usuário no plano 'basico' e envia
     // o e-mail de boas-vindas INLINE — nesta instância Skip Cloud callbacks
     // onRecordAfterCreateSuccess não executam (bug comprovado), então nada
     // aqui depende de hook de evento.
@@ -71,7 +71,7 @@ export const authService = {
   logout(): void {
     pb.authStore.clear()
     // Avisa o app (listener do authStore em AuthContext) que o usuário mudou.
-    pb.authStore.save('', { id: '', email: '', name: '', plan: 'free' } as never)
+    pb.authStore.save('', { id: '', email: '', name: '', plan: 'basico' } as never)
   },
 
   async refreshUser(): Promise<User | null> {
@@ -84,7 +84,7 @@ export const authService = {
         name:
           (rec.record.name as string) ||
           (rec.record.email ? rec.record.email.split('@')[0] : 'Usuário'),
-        plan: (rec.record.plan as UserPlan) || 'free',
+        plan: (rec.record.plan as UserPlan) || 'basico',
         telefone: (rec.record.telefone as string) || undefined,
         avatar: rec.record.avatar as string | undefined,
         created: rec.record.created,

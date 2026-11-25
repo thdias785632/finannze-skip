@@ -83,7 +83,7 @@ export const ImoveisLista: React.FC = () => {
         {/* Header da seção */}
         <div className="flex items-start justify-between mb-1">
           <h1 className="text-2xl font-bold text-[#1F1235]">Imóveis</h1>
-          {/* Criar imóvel é exclusivo do plano Premium */}
+          {/* Criar imóvel é exclusivo do plano Ouro */}
           {canAccessImoveis && (
             <button
               onClick={() => setShowNovo(true)}
@@ -123,7 +123,7 @@ export const ImoveisLista: React.FC = () => {
           </div>
         </div>
 
-        {/* Meus imóveis — só quem tem Premium cadastra e vê a própria lista aqui */}
+        {/* Meus imóveis — só quem tem Ouro cadastra e vê a própria lista aqui */}
         {canAccessImoveis && (
           <>
             <h2 className="text-lg font-bold text-[#1F1235] mb-3">Meus imóveis</h2>
@@ -154,7 +154,7 @@ export const ImoveisLista: React.FC = () => {
           </>
         )}
 
-        {/* Compartilhados comigo — visível também para não-Premium (esta é a única seção que eles veem) */}
+        {/* Compartilhados comigo — visível também para quem não é Ouro (esta é a única seção que eles veem) */}
         {(compartilhadosComigo.length > 0 || !canAccessImoveis) && (
           <h2
             className={`text-lg font-bold text-[#1F1235] mb-3 flex items-center gap-2 ${canAccessImoveis ? 'mt-6' : ''}`}

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { UserRound, LogOut, MessageCircle, Pencil } from 'lucide-react'
+import { UserRound, LogOut, MessageCircle, Pencil, Crown } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,6 +13,7 @@ import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/hooks/use-toast'
 import { buscarUrlContato, urlAvatar } from '@/services/perfil'
 import { EditarPerfilDialog } from '@/components/EditarPerfilDialog'
+import { NOME_PLANO } from '@/types/financial'
 
 /**
  * Item de perfil do usuário no header (no lugar do antigo botão "Sair").
@@ -74,6 +75,10 @@ export const PerfilMenu: React.FC = () => {
               {user?.name || 'Usuário'}
             </p>
             <p className="text-xs text-[#6B7280] truncate">{user?.email}</p>
+            <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-[#F1EAF9] px-2 py-0.5 text-[10px] font-bold text-[#6639A6]">
+              <Crown className="h-3 w-3" />
+              Plano {NOME_PLANO[user?.plan || 'basico']}
+            </span>
           </div>
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => setDialogEditar(true)}>

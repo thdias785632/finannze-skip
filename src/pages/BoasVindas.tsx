@@ -1,28 +1,32 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Sparkles, Check, Crown, ArrowRight, Mail } from 'lucide-react'
+import {
+  Check,
+  X,
+  Crown,
+  PartyPopper,
+  Users,
+  MessageCircle,
+  Building2,
+  Sparkles,
+} from 'lucide-react'
 import { PLANOS } from '@/lib/planos'
 import { useAuth } from '@/context/AuthContext'
+import { AppHeader } from '@/components/AppHeader'
+import { BottomNav } from '@/components/BottomNav'
 
-/**
- * Tela de boas-vindas mostrada APENAS após a criação de conta nova (signup).
- *
- * Mostra as mesmas informações do e-mail de boas-vindas enviado pelo backend
- * (plano Free atual, VIP e Premium com preços) na identidade visual roxa do
- * app. O botão "Começar" leva ao Início (/resumo). Login de usuário existente
- * NUNCA passa por aqui — a AuthScreen só marca a flag de sessão no signup.
- */
+export const CHAVE_BOAS_VINDAS = 'quitafy:boas-vindas-pendentes'
 
-export const CHAVE_BOAS_VINDAS = 'quitafy_boas_vindas_v1'
-
+/** Marca que o próximo acesso a /boas-vindas é pós-cadastro (só o signup chama). */
 export function marcarBoasVindasPendentes() {
   try {
     sessionStorage.setItem(CHAVE_BOAS_VINDAS, '1')
-  } catch (_) {
-    /* sessionStorage indisponível — sem a tela, cadastro segue normal */
+  } catch {
+    /* storage indisponível */
   }
 }
 
+/** Consome a flag pós-cadastro: true apenas na primeira visita após o signup. */
 export function consumirBoasVindasPendentes(): boolean {
   try {
     if (sessionStorage.getItem(CHAVE_BOAS_VINDAS) === '1') {
@@ -30,104 +34,110 @@ export function consumirBoasVindasPendentes(): boolean {
       return true
     }
   } catch {
-    /* intentionally ignored */
+    /* storage indisponível */
   }
   return false
+}
+
+const PLANO_ICONE: Record<string, React.ReactNode> = {
+  basico: <Users className="w-4 h-4 text-[#6639A6]" />,
+  bronze: <Sparkles className="w-4 h-4 text-[#6639A6]" />,
+  prata: <MessageCircle className="w-4 h-4 text-[#6639A6]" />,
+  ouro: <Building2 className="w-4 h-4 text-[#6639A6]" />,
 }
 
 export const BoasVindas: React.FC = () => {
   const navigate = useNavigate()
   const { user } = useAuth()
+  const planoAtual = user?.plan || 'basico'
 
-  const comecar = () => {
+  useEffect(() => {
     consumirBoasVindasPendentes()
-    navigate('/resumo', { replace: true })
-  }
+  }, [])
 
   return (
-    <div className="min-h-dvh bg-[#F6F3FB] text-[#1F1438] flex flex-col items-center justify-center px-4 py-8 relative overflow-hidden">
-      {/* Luz radial roxa de fundo */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[350px] bg-[#9D4EDD]/15 blur-[120px] pointer-events-none rounded-full" />
+    <div className="min-h-screen bg-[#F5F3F7] pb-24">
+      <AppHeader />
 
-      <main className="w-full max-w-[420px] z-10 my-auto">
-        {/* Cabeçalho */}
-        <header className="flex flex-col items-center text-center mb-6">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#6639A6]/10 border border-[#6639A6]/20 text-xs text-[#4A247A] font-medium mb-3">
-            <Sparkles className="w-3.5 h-3.5 text-[#9D4EDD]" />
-            Conta criada com sucesso
+      <div className="max-w-md mx-auto px-4 pt-4">
+        <div className="rounded-3xl bg-gradient-to-br from-[#7C3AED] to-[#6639A6] p-6 text-white shadow-lg">
+          <div className="flex items-center gap-2 mb-2">
+            <PartyPopper className="w-6 h-6 text-amber-300" />
+            <h1 className="text-2xl font-black">Boas-vindas ao Quitafy!</h1>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-[#1F1438]">
-            🎉 Bem-vindo(a){user?.name ? `, ${user.name.split(' ')[0]}` : ''}!
-          </h1>
-          <p className="mt-2 text-sm text-[#6B7280] max-w-xs leading-relaxed">
-            Você começou sua jornada pelo plano <strong className="text-[#4A247A]">Free</strong>.
-            Enviamos um e-mail com essas mesmas informações para {user?.email || 'seu e-mail'}.
+          <p className="text-sm text-white/90 leading-relaxed">
+            {user?.name ? `${user.name.split(' ')[0]}, s` : 'S'}ua conta foi criada no plano{' '}
+            <strong className="text-amber-300">Básico</strong>. Você já pode cadastrar receitas,
+            despesas, cartões e dividir lançamentos em grupos compartilhados.
           </p>
-        </header>
+        </div>
 
-        {/* Planos */}
-        <section aria-label="Planos do Quitafy" className="space-y-3">
-          {/* Free — plano atual */}
-          <div className="bg-white rounded-2xl p-4 border border-[#E2D6F0]">
-            <div className="flex items-baseline justify-between gap-2">
-              <p className="text-sm font-black text-[#1F1438]">Free — seu plano atual</p>
-              <p className="text-sm font-black text-[#4A247A]">Grátis</p>
-            </div>
-            <ul className="mt-2 space-y-1">
-              <li className="flex items-start gap-1.5 text-xs text-gray-600">
-                <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
-                Controle de receitas e despesas, cartões e extrato do mês atual e passados
-              </li>
-            </ul>
-          </div>
+        <h2 className="mt-6 mb-3 flex items-center gap-2 text-lg font-bold text-[#1F1235]">
+          <Crown className="w-5 h-5 text-[#6639A6]" /> Conheça nossos planos
+        </h2>
 
-          {/* VIP e Premium — a partir de PLANOS, sem duplicar preços/benefícios */}
-          {PLANOS.filter((p) => p.id !== 'free').map((p) => (
-            <div key={p.id} className="bg-white rounded-2xl p-4 border border-[#E2D6F0]">
-              <div className="flex items-baseline justify-between gap-2">
-                <p className="text-sm font-black text-[#1F1438] flex items-center gap-1.5">
-                  {p.id === 'vip' && <Crown className="w-3.5 h-3.5 text-[#9D4EDD]" />}
-                  {p.name}
-                </p>
-                <p className="text-sm font-black text-[#4A247A]">
-                  {p.price}
-                  <span className="text-[10px] font-semibold text-gray-500">{p.period}</span>
-                </p>
-              </div>
-              <ul className="mt-2 space-y-1">
-                {p.features
-                  .filter((f) => f.included && !f.title.startsWith('Tudo'))
-                  .filter((f) => f.title !== 'Prioridade em novos recursos do Quitafy')
-                  .map((f, i) => (
-                    <li key={i} className="flex items-start gap-1.5 text-xs text-gray-600">
-                      <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
-                      {f.title}
+        <div className="space-y-4">
+          {PLANOS.map((plano) => {
+            const atual = plano.id === planoAtual
+            return (
+              <div
+                key={plano.id}
+                className={`rounded-3xl border p-5 ${plano.color} relative overflow-hidden`}
+              >
+                {atual && (
+                  <span className="absolute top-0 right-0 rounded-bl-2xl bg-emerald-600 px-3 py-1 text-[10px] font-bold text-white">
+                    Seu plano
+                  </span>
+                )}
+                <div className="flex items-center gap-2">
+                  {PLANO_ICONE[plano.id]}
+                  <h3 className="text-lg font-black text-[#1F1438]">{plano.name}</h3>
+                </div>
+                <p className="text-xs text-gray-500 mt-0.5">{plano.tagline}</p>
+                <div className="mt-3 flex items-baseline gap-1">
+                  <span className="text-2xl font-black text-[#4A247A]">{plano.price}</span>
+                  {plano.period && (
+                    <span className="text-xs font-semibold text-gray-500">{plano.period}</span>
+                  )}
+                </div>
+                <ul className="mt-4 space-y-2">
+                  {plano.features.map((f, i) => (
+                    <li key={i} className="flex items-start gap-2">
+                      {f.included ? (
+                        <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                      ) : (
+                        <X className="w-4 h-4 text-gray-300 shrink-0 mt-0.5" />
+                      )}
+                      <span
+                        className={`text-xs leading-relaxed ${
+                          f.included ? 'text-[#1F1438]' : 'text-gray-400'
+                        }`}
+                      >
+                        {f.included ? f.title : `${f.title} — ${f.reason}`}
+                      </span>
                     </li>
                   ))}
-              </ul>
-            </div>
-          ))}
-        </section>
+                </ul>
+              </div>
+            )
+          })}
+        </div>
 
-        <p className="flex items-start justify-center gap-1.5 text-[11px] text-[#6B7280] mt-4 text-center leading-relaxed">
-          <Mail className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-          As informações e preços também ficam na seção de Planos, dentro do app.
+        <p className="mt-6 text-center text-xs text-gray-500">
+          Ativação dos planos Bronze, Prata e Ouro feita pelo administrador — sem cobrança
+          automática no app.
         </p>
 
-        {/* CTA */}
         <button
           type="button"
-          onClick={comecar}
-          className="w-full h-12 mt-5 flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#4A247A] via-[#6639A6] to-[#7A45BF] text-white font-semibold text-sm shadow-[0_8px_20px_rgba(102,57,166,0.35)] hover:opacity-95 active:scale-[0.99] transition cursor-pointer"
+          onClick={() => navigate('/dashboard')}
+          className="mt-6 w-full rounded-2xl bg-[#6639A6] py-3 text-sm font-bold text-white hover:bg-[#522c8a] transition"
         >
-          Começar
-          <ArrowRight className="w-4 h-4" />
+          Começar a usar o Quitafy
         </button>
-      </main>
+      </div>
 
-      <footer className="text-center text-xs text-[#6B7280]/70 z-10 pt-6">
-        Quitafy © {new Date().getFullYear()}
-      </footer>
+      <BottomNav />
     </div>
   )
 }

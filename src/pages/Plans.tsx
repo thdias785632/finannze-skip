@@ -1,147 +1,106 @@
 import React from 'react'
+import { useNavigate } from 'react-router-dom'
+import { ArrowLeft, Check, X, Crown, Users, MessageCircle, Building2, Sparkles } from 'lucide-react'
+import { PLANOS } from '@/lib/planos'
+import { useAuth } from '@/context/AuthContext'
 import { AppHeader } from '@/components/AppHeader'
 import { BottomNav } from '@/components/BottomNav'
-import { useAuth } from '@/context/AuthContext'
-import type { UserPlan } from '@/types/financial'
-import { PLANOS } from '@/lib/planos'
-import { Check, Crown, Shield, Info } from 'lucide-react'
+
+const PLANO_ICONE: Record<string, React.ReactNode> = {
+  basico: <Users className="w-4 h-4 text-[#6639A6]" />,
+  bronze: <Sparkles className="w-4 h-4 text-[#6639A6]" />,
+  prata: <MessageCircle className="w-4 h-4 text-[#6639A6]" />,
+  ouro: <Building2 className="w-4 h-4 text-[#6639A6]" />,
+}
 
 export const PlansPage: React.FC = () => {
-  const { plan } = useAuth()
+  const navigate = useNavigate()
+  const { user } = useAuth()
+  const planoAtual = user?.plan || 'basico'
 
   return (
-    <div className="min-h-screen bg-[#F6F3FB] text-[#1F1438] pb-24">
+    <div className="min-h-screen bg-[#F5F3F7] pb-24">
       <AppHeader />
 
-      <main className="max-w-md mx-auto px-4 pt-4 space-y-4">
-        <div className="text-center space-y-1">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-100 text-[#6639A6] text-xs font-bold">
-            <Crown className="w-3.5 h-3.5" />
-            Seu plano atual: <span className="uppercase text-[#4A247A] font-black">{plan}</span>
-          </div>
-          <h1 className="text-xl font-black text-[#1F1438]">Comparativo de Planos</h1>
-          <p className="text-xs text-gray-500 max-w-xs mx-auto">
-            Veja o que cada perfil libera no Quitafy e escolha o plano ideal para suas metas
-          </p>
-        </div>
+      <div className="max-w-md mx-auto px-4 pt-4">
+        <button
+          type="button"
+          onClick={() => navigate(-1)}
+          aria-label="Voltar para a tela anterior"
+          className="flex items-center gap-1.5 text-sm font-semibold text-[#6639A6] mb-4 hover:underline"
+        >
+          <ArrowLeft className="w-4 h-4" /> Voltar
+        </button>
 
-        {/* Informação sobre ativação manual pelo dono */}
-        <div className="bg-white rounded-3xl p-4 border border-[#EBE4F5] shadow-xs flex items-start gap-3">
-          <div className="w-8 h-8 rounded-2xl bg-purple-100 text-[#6639A6] flex items-center justify-center shrink-0 mt-0.5">
-            <Info className="w-4 h-4" />
-          </div>
-          <div className="text-xs">
-            <p className="font-bold text-[#1F1438]">Como funciona a ativação?</p>
-            <p className="text-gray-600 mt-0.5 leading-relaxed text-[11px]">
-              A ativação dos planos <strong>VIP</strong> e <strong>Premium</strong> é realizada
-              diretamente pelo administrador do sistema. Para solicitar sua ativação, entre em
-              contato com o suporte ou gestor do app.
-            </p>
-          </div>
-        </div>
+        <h1 className="text-2xl font-black text-[#1F1438]">Planos Quitafy</h1>
+        <p className="text-sm text-gray-500 mt-1 mb-5">
+          Escolha o plano ideal para o seu momento. Cada plano inclui tudo do anterior.
+        </p>
 
-        {/* Cards dos Planos */}
-        <div className="space-y-3.5">
-          {PLANOS.map((p) => {
-            const isCurrent = plan === p.id
+        <div className="space-y-4">
+          {PLANOS.map((plano) => {
+            const atual = plano.id === planoAtual
             return (
               <div
-                key={p.id}
-                className={`rounded-3xl p-5 border-2 transition relative overflow-hidden ${p.color} ${
-                  isCurrent ? 'ring-2 ring-[#6639A6]/30' : ''
-                }`}
+                key={plano.id}
+                className={`rounded-3xl border p-5 ${plano.color} relative overflow-hidden`}
               >
-                {p.popular && (
-                  <div className="absolute top-0 right-0 bg-[#6639A6] text-white text-[9px] uppercase font-black px-3 py-1 rounded-bl-xl tracking-wider">
-                    Mais Popular
-                  </div>
+                {plano.popular && (
+                  <span className="absolute top-0 right-0 rounded-bl-2xl bg-[#6639A6] px-3 py-1 text-[10px] font-bold text-white">
+                    Mais popular
+                  </span>
+                )}
+                {atual && (
+                  <span className="absolute top-0 right-0 rounded-bl-2xl bg-emerald-600 px-3 py-1 text-[10px] font-bold text-white">
+                    Seu plano
+                  </span>
                 )}
 
-                <div className="flex items-center justify-between mb-2">
-                  <div>
-                    <h2 className="text-base font-black text-[#1F1438] flex items-center gap-1.5">
-                      {p.name}
-                      {isCurrent && (
-                        <span className="text-[10px] bg-[#6639A6] text-white px-2 py-0.5 rounded-full font-bold">
-                          Plano Atual
-                        </span>
-                      )}
-                    </h2>
-                    <p className="text-xs text-gray-500">{p.tagline}</p>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <span className="text-lg font-black text-[#1F1438]">{p.price}</span>
-                    {p.period && (
-                      <span className="block text-[10px] text-gray-500 font-semibold">
-                        {p.period}
-                      </span>
-                    )}
-                    {p.popular && (
-                      <span className="block text-[10px] font-bold text-[#6639A6]">Assine VIP</span>
-                    )}
-                  </div>
+                <div className="flex items-center gap-2">
+                  {PLANO_ICONE[plano.id]}
+                  <h2 className="text-lg font-black text-[#1F1438]">{plano.name}</h2>
+                </div>
+                <p className="text-xs text-gray-500 mt-0.5">{plano.tagline}</p>
+
+                <div className="mt-3 flex items-baseline gap-1">
+                  <span className="text-2xl font-black text-[#4A247A]">{plano.price}</span>
+                  {plano.period && (
+                    <span className="text-xs font-semibold text-gray-500">{plano.period}</span>
+                  )}
                 </div>
 
-                {/* Lista de Recursos */}
-                <div className="space-y-2 mt-4 pt-3 border-t border-gray-100">
-                  {p.features.map((feat, idx) => (
-                    <div key={idx} className="flex items-start gap-2 text-xs">
-                      {feat.included ? (
+                <ul className="mt-4 space-y-2">
+                  {plano.features.map((f, i) => (
+                    <li key={i} className="flex items-start gap-2">
+                      {f.included ? (
                         <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                       ) : (
-                        <span className="w-4 h-4 rounded-full bg-gray-200 text-gray-400 flex items-center justify-center shrink-0 mt-0.5 text-[10px] font-bold">
-                          ✕
-                        </span>
+                        <X className="w-4 h-4 text-gray-300 shrink-0 mt-0.5" />
                       )}
-                      <div>
-                        <span
-                          className={`font-medium ${
-                            feat.included ? 'text-gray-800' : 'text-gray-400 line-through'
-                          }`}
-                        >
-                          {feat.title}
-                        </span>
-                        {!feat.included && feat.reason && (
-                          <span className="block text-[10px] text-purple-700 font-semibold">
-                            {feat.reason}
-                          </span>
-                        )}
-                      </div>
-                    </div>
+                      <span
+                        className={`text-xs leading-relaxed ${
+                          f.included ? 'text-[#1F1438]' : 'text-gray-400'
+                        }`}
+                      >
+                        {f.included ? f.title : `${f.title} — ${f.reason}`}
+                      </span>
+                    </li>
                   ))}
-                </div>
+                </ul>
               </div>
             )
           })}
         </div>
 
-        {/* Guia para o Dono do App (Instruções do Backend) */}
-        <div className="bg-gradient-to-br from-[#1A0E2E] to-[#2A1548] text-white rounded-3xl p-5 shadow-md space-y-2">
-          <div className="flex items-center gap-2">
-            <Shield className="w-4 h-4 text-amber-300" />
-            <h3 className="text-xs font-bold text-white uppercase tracking-wider">
-              Painel do Administrador (Como ativar usuários)
-            </h3>
-          </div>
-          <p className="text-[11px] text-white/80 leading-relaxed">
-            Para alterar o plano de um usuário para <strong>VIP</strong> ou <strong>Premium</strong>
-            :
+        <div className="mt-6 flex items-start gap-2 rounded-2xl bg-[#F1EAF9] p-4">
+          <Crown className="w-4 h-4 text-[#6639A6] shrink-0 mt-0.5" />
+          <p className="text-xs text-[#4A247A] leading-relaxed">
+            Para alterar o plano de um usuário para <strong>Bronze</strong>, <strong>Prata</strong>{' '}
+            ou <strong>Ouro</strong>, fale com o administrador pelo menu Contato. A ativação é
+            manual — sem cobrança automática no app.
           </p>
-          <ol className="text-[11px] text-white/70 space-y-1 list-decimal list-inside pl-1">
-            <li>
-              Acesse a aba <strong>Collections</strong> no painel PocketBase do projeto.
-            </li>
-            <li>
-              Abra a coleção <strong>users</strong>.
-            </li>
-            <li>
-              Edite o registro do usuário e mude o campo <strong>plan</strong> para <code>vip</code>{' '}
-              ou <code>premium</code>.
-            </li>
-            <li>Pronto! O usuário ganha acesso instantâneo aos recursos na próxima navegação.</li>
-          </ol>
         </div>
-      </main>
+      </div>
 
       <BottomNav />
     </div>

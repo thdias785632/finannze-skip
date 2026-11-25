@@ -4,6 +4,7 @@ import { Sparkles } from 'lucide-react'
 import appIcon from '@/assets/logo-192-8a6a4.png'
 import { PerfilMenu } from '@/components/PerfilMenu'
 import { useAuth } from '@/context/AuthContext'
+import { NOME_PLANO, type UserPlan } from '@/types/financial'
 
 interface AppHeaderProps {
   title?: string
@@ -12,11 +13,11 @@ interface AppHeaderProps {
 export const AppHeader: React.FC<AppHeaderProps> = ({ title = 'QuitaFy' }) => {
   const { plan } = useAuth()
 
-  const planBadgeClasses = {
-    free: 'bg-gray-100 text-gray-700 border-gray-200',
-    vip: 'bg-purple-100 text-[#6639A6] border-purple-200 font-bold',
-    premium:
-      'bg-gradient-to-r from-amber-100 to-amber-200 text-amber-800 border-amber-300 font-black shadow-xs',
+  const planBadgeClasses: Record<UserPlan, string> = {
+    basico: 'bg-gray-100 text-gray-700 border-gray-200',
+    bronze: 'bg-purple-100 text-[#6639A6] border-purple-200 font-bold',
+    prata: 'bg-gradient-to-r from-slate-100 to-slate-200 text-slate-700 border-slate-300 font-bold',
+    ouro: 'bg-gradient-to-r from-amber-100 to-amber-200 text-amber-800 border-amber-300 font-black shadow-xs',
   }
 
   return (
@@ -35,10 +36,8 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ title = 'QuitaFy' }) => {
               planBadgeClasses[plan]
             }`}
           >
-            {plan === 'premium' && (
-              <Sparkles className="w-2.5 h-2.5 text-amber-600 fill-amber-500" />
-            )}
-            {plan}
+            {plan === 'ouro' && <Sparkles className="w-2.5 h-2.5 text-amber-600 fill-amber-500" />}
+            {NOME_PLANO[plan]}
           </Link>
         </div>
 

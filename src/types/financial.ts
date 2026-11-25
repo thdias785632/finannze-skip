@@ -1,4 +1,12 @@
-export type UserPlan = 'free' | 'vip' | 'premium'
+export type UserPlan = 'basico' | 'bronze' | 'prata' | 'ouro'
+
+/** Rótulo amigável de cada plano (o valor bruto vem do campo plan do usuário). */
+export const NOME_PLANO: Record<UserPlan, string> = {
+  basico: 'Básico',
+  bronze: 'Bronze',
+  prata: 'Prata',
+  ouro: 'Ouro',
+}
 
 export interface User {
   id: string

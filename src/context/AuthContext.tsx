@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import { authService } from '@/services/auth'
 import type { User, UserPlan } from '@/types/financial'
+import { planoAbaixoDe } from '@/lib/planos'
 import pb from '@/lib/pocketbase/client'
 
 interface AuthContextType {
@@ -46,10 +47,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [])
 
-  const plan: UserPlan = user?.plan || 'free'
-  const canAccessRecurring = plan === 'vip' || plan === 'premium'
-  const canAccessFutureExtract = plan === 'vip' || plan === 'premium'
-  const canAccessImoveis = plan === 'premium'
+  const plan: UserPlan = user?.plan || 'basico'
+  const canAccessRecurring = planoAbaixoDe(plan, 'bronze') === false
+  const canAccessFutureExtract = planoAbaixoDe(plan, 'bronze') === false
+  const canAccessImoveis = plan === 'ouro'
 
   const login = async (email: string, pass: string) => {
     setLoading(true)

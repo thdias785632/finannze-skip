@@ -228,7 +228,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
                   />
                 </div>
                 <p className="text-[11px] text-[#6B7280] mt-1">
-                  Usaremos para vincular seu WhatsApp (Premium) e seu contato.
+                  Usaremos para vincular seus lançamentos pelo WhatsApp (Prata) e seu contato.
                 </p>
               </div>
             )}
@@ -310,7 +310,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
                 <p className="text-xs font-bold text-[#1F1438]">Planos do Quitafy</p>
               </div>
               <div className="space-y-2">
-                {PLANOS.filter((p) => p.id !== 'free').map((p) => (
+                {PLANOS.filter((p) => p.id !== 'basico').map((p) => (
                   <div
                     key={p.id}
                     className="bg-white rounded-2xl p-3 border border-[#E2D6F0] text-left"
@@ -340,8 +340,8 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
                 ))}
               </div>
               <p className="text-[10px] text-[#6B7280] mt-2.5 text-center leading-relaxed">
-                Ativação dos planos VIP e Premium feita pelo administrador — sem cobrança automática
-                no app.
+                Ativação dos planos Bronze, Prata e Ouro feita pelo administrador — sem cobrança
+                automática no app.
               </p>
             </div>
           )}

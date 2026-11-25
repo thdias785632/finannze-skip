@@ -20,9 +20,9 @@
  *     Perguntas ficam em whatsapp_pendencias (uma por número, expira em 1h);
  *     a resposta seguinte do mesmo número é interpretada como complemento,
  *     a menos que pareça um comando novo (tem valor → mensagem nova).
- *     RESTRIÇÃO DE PLANO: a interação pelo WhatsApp é exclusiva do plano
- *     Premium — quem é free ou VIP tem a mensagem LOGADA (nada é gravado em
- *     transacoes) e recebe uma resposta explicando como ativar o Premium.
+ *     RESTRIÇÃO DE PLANO: a interação pelo WhatsApp exige o plano Prata ou
+ *     Ouro — nos demais (Básico/Bronze) a mensagem é LOGADA (nada é gravado em
+ *     transacoes) e o bot responde explicando como ativar o Prata.
  *
  * A Meta exige resposta em menos de 20s: nada aqui bloqueia além do necessário
  * e qualquer falha é capturada para não derrubar a rota em 500. A transação é
@@ -611,25 +611,25 @@ routerAdd('POST', '/backend/v1/whatsapp/webhook', (c) => {
     }
     const usuario = $app.findRecordById('users', conta.getString('user_id'))
 
-    // ---- trava de plano: interação pelo WhatsApp é exclusiva do Premium ----
-    // Free e VIP têm a mensagem registrada (com um status próprio, para o
+    // ---- trava de plano: interação pelo WhatsApp exige Prata ou Ouro ----
+    // Básico e Bronze têm a mensagem registrada (com um status próprio, para o
     // log do painel), NADA é gravado em transacoes e o bot explica o plano.
-    const planoUsuario = String(usuario.getString('plan') || 'free').toLowerCase()
-    if (planoUsuario !== 'premium') {
+    const planoUsuario = String(usuario.getString('plan') || 'basico').toLowerCase()
+    const planosComWhatsapp = { prata: true, ouro: true }
+    if (!planosComWhatsapp[planoUsuario]) {
       console.log(
         '[whatsapp_webhook] interação bloqueada: usuário',
         usuario.getString('email'),
         'no plano',
         planoUsuario,
-        '(WhatsApp é exclusivo do Premium)',
+        '(WhatsApp exige Prata ou Ouro)',
       )
       registrarMensagem(msg, usuario.id, 'plano_insuficiente', '')
       limparPendencia(msg.from)
       responderWhatsApp(
         msg.from,
-        '🔒 Olha, o atendimento pelo WhatsApp faz parte do plano *Premium* do Quitafy (R$ 29,90/mês), ' +
-          'que também inclui o módulo de Imóveis na planta com correção pelo INCC.\n\n' +
-          'Pra liberar, basta falar com a gente pedindo a ativação do Premium — a ativação é manual ' +
+        '🔒 Olha, o lançamento pelo WhatsApp faz parte do plano *Prata* do Quitafy (R$ 24,99/mês).\n\n' +
+          'Pra liberar, basta falar com a gente pedindo a ativação do Prata — a ativação é manual ' +
           'e o time faz rapidinho. Depois disso, volta aqui e registra tudo por mensagem: ' +
           '"gastei 50 no uber", "recebi 1000 de salário", parcelas, recorrentes e mais.\n\n' +
           'Enquanto isso, você pode lançar suas despesas normalmente pelo app. 💜',

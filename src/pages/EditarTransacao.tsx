@@ -411,7 +411,7 @@ export const EditarTransacaoPage: React.FC = () => {
               onChange={setDivisao}
             />
 
-            {/* Recorrente — exclusivo dos planos pagos (VIP/Premium) */}
+            {/* Recorrente — exclusivo dos planos Bronze ou superiores */}
             <div>
               <label className={labelCls}>Recorrente:</label>
               <div
@@ -421,7 +421,11 @@ export const EditarTransacaoPage: React.FC = () => {
                   className={`flex items-center gap-2 text-xs font-semibold text-gray-700 ${
                     canAccessRecurring ? 'cursor-pointer' : 'cursor-not-allowed'
                   }`}
-                  title={!canAccessRecurring ? 'Recurso exclusivo do plano VIP' : undefined}
+                  title={
+                    !canAccessRecurring
+                      ? 'Recurso exclusivo dos planos Bronze ou superiores'
+                      : undefined
+                  }
                 >
                   <input
                     type="radio"
@@ -453,7 +457,7 @@ export const EditarTransacaoPage: React.FC = () => {
                     to="/planos"
                     className="ml-auto flex items-center gap-1 text-[10px] font-bold text-amber-500"
                   >
-                    Recurso VIP
+                    Recurso Bronze
                   </Link>
                 )}
               </div>

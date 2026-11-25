@@ -581,16 +581,15 @@ const FutureLock: React.FC = () => (
     </div>
     <h3 className="text-base font-black text-[#1F1438]">Extrato de Meses Futuros é Exclusivo</h3>
     <p className="text-xs text-gray-600 mt-1 max-w-xs mx-auto">
-      No plano <strong>Free</strong> você visualiza apenas os meses correntes e passados. Atualize
-      para o <strong>VIP</strong> ou <strong>Premium</strong> para desbloquear a previsão dos
-      próximos meses!
+      No plano <strong>Básico</strong> você visualiza apenas os meses correntes e passados. Atualize
+      para o <strong>Bronze</strong> ou superior para desbloquear a previsão dos próximos meses!
     </p>
     <Link
       to="/planos"
       className="inline-flex items-center gap-2 mt-4 px-5 py-2.5 rounded-full bg-gradient-to-r from-[#4A247A] to-[#6639A6] text-white text-xs font-bold shadow-md hover:opacity-95 transition"
     >
       <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-      Conhecer Planos VIP e Premium
+      Conhecer Planos Bronze e acima
     </Link>
   </div>
 )

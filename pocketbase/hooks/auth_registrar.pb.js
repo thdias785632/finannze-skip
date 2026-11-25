@@ -43,7 +43,7 @@ routerAdd('POST', '/backend/v1/auth/registrar', (c) => {
   /**
    * Envia o e-mail de boas-vindas (mesmo conteúdo do antigo hook
    * signup_email.pb.js): remetente "Quitafy <no-reply@quitafy.com.br>",
-   * HTML + texto puro com os planos Free / VIP / Premium. Best-effort.
+   * HTML + texto puro com os planos Básico / Bronze / Prata / Ouro. Best-effort.
    */
   function enviarBoasVindas(email, nome) {
     const html = [
@@ -52,14 +52,16 @@ routerAdd('POST', '/backend/v1/auth/registrar', (c) => {
         nome +
         '!</h1>',
       '  <p style="font-size:14px;line-height:1.6;margin:0 0 12px;">',
-      '    Você começou sua jornada pelo plano <strong>Free</strong> — e ele já inclui controle de',
-      '    receitas e despesas, cartões com controle de fatura, categorias com gráfico e o extrato',
-      '    do mês atual e dos meses passados.',
+      '    Você começou sua jornada pelo plano <strong>Básico</strong> — e ele já inclui controle de',
+      '    receitas e despesas, cartões com controle de fatura, categorias com gráfico, o extrato',
+      '    do mês atual e dos meses passados e <strong>grupos compartilhados de despesas</strong>:',
+      '    divida lançamentos com família e amigos, por pessoa e com quem pagou.',
       '  </p>',
       '  <p style="font-size:14px;line-height:1.6;margin:0 0 12px;">Além dele, temos:</p>',
       '  <ul style="font-size:14px;line-height:1.8;margin:0 0 12px;padding-left:20px;">',
-      '    <li><strong>VIP — R$ 14,99/mês</strong>: despesas e receitas recorrentes e extratos de todos os meses (inclusive futuros).</li>',
-      '    <li><strong>Premium — R$ 29,90/mês</strong>: tudo do VIP + acompanhamento de imóveis na planta com correção pelo INCC e interação pelo WhatsApp.</li>',
+      '    <li><strong>Bronze — R$ 14,99/mês</strong>: tudo do Básico + despesas e receitas recorrentes e extratos de todos os meses (inclusive futuros).</li>',
+      '    <li><strong>Prata — R$ 24,99/mês</strong>: tudo do Bronze + lançamentos pelo WhatsApp ("gastei 50 no uber" e pronto).</li>',
+      '    <li><strong>Ouro — R$ 29,99/mês</strong>: tudo do Prata + módulo de imóveis na planta com correção pelo INCC.</li>',
       '  </ul>',
       '  <p style="font-size:14px;line-height:1.6;margin:0 0 16px;">',
       '    As informações e preços ficam na seção de <strong>Planos</strong>, dentro do app.',
@@ -71,9 +73,10 @@ routerAdd('POST', '/backend/v1/auth/registrar', (c) => {
     const texto = [
       'Bem-vindo(a) ao Quitafy, ' + nome + '!',
       '',
-      'Você começou sua jornada pelo plano Free. Além dele, temos:',
-      '- VIP — R$ 14,99/mês: despesas e receitas recorrentes e extratos de todos os meses (inclusive futuros).',
-      '- Premium — R$ 29,90/mês: tudo do VIP + acompanhamento de imóveis na planta com correção pelo INCC e interação pelo WhatsApp.',
+      'Você começou sua jornada pelo plano Básico. Além dele, temos:',
+      '- Bronze — R$ 14,99/mês: tudo do Básico + despesas e receitas recorrentes e extratos de todos os meses (inclusive futuros).',
+      '- Prata — R$ 24,99/mês: tudo do Bronze + lançamentos pelo WhatsApp ("gastei 50 no uber" e pronto).',
+      '- Ouro — R$ 29,99/mês: tudo do Prata + módulo de imóveis na planta com correção pelo INCC.',
       '',
       'As informações e preços ficam na seção de Planos, dentro do app.',
       '',
