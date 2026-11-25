@@ -1,5 +1,7 @@
 import React, { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
+import { marcarBoasVindasPendentes } from '@/pages/BoasVindas'
 import {
   Eye,
   EyeOff,
@@ -60,6 +62,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
   const [error, setError] = useState<string | null>(null)
 
   const { login, signup } = useAuth()
+  const navigate = useNavigate()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -99,10 +102,10 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
       } else {
         const telNormalizado = normalizarTelefoneComDdi(telefone) as string
         await signup(name, email, password, telNormalizado)
-        toast({
-          title: 'Conta criada com sucesso!',
-          description: 'Sua jornada no Quitafy começou.',
-        })
+        // Cadastro NOVO passa pela tela de boas-vindas antes do Início.
+        marcarBoasVindasPendentes()
+        navigate('/boas-vindas', { replace: true })
+        return
       }
       onSuccess?.()
     } catch (err: unknown) {

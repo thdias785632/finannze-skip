@@ -1,5 +1,5 @@
 import React from 'react'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from '@/context/AuthContext'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import ScrollToTop from '@/components/ScrollToTop'
@@ -13,6 +13,7 @@ import { ImoveisLista } from '@/pages/imoveis/ImoveisLista'
 import { ImovelDetalhe } from '@/pages/imoveis/ImovelDetalhe'
 import { NewTransactionPage } from '@/pages/NewTransaction'
 import { EditarTransacaoPage } from '@/pages/EditarTransacao'
+import { BoasVindas, consumirBoasVindasPendentes } from '@/pages/BoasVindas'
 import NotFound from '@/pages/NotFound'
 
 const App: React.FC = () => {
@@ -32,6 +33,12 @@ const App: React.FC = () => {
             <Route path="/planos" element={<PlansPage />} />
             <Route path="/nova-transacao" element={<NewTransactionPage />} />
             <Route path="/editar-transacao/:id" element={<EditarTransacaoPage />} />
+            <Route
+              path="/boas-vindas"
+              element={
+                consumirBoasVindasPendentes() ? <BoasVindas /> : <Navigate to="/resumo" replace />
+              }
+            />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>
