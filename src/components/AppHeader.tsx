@@ -8,7 +8,7 @@ interface AppHeaderProps {
   title?: string
 }
 
-export const AppHeader: React.FC<AppHeaderProps> = ({ title = 'Quitafy' }) => {
+export const AppHeader: React.FC<AppHeaderProps> = ({ title = 'QuitaFy' }) => {
   const { user, plan, logout } = useAuth()
 
   const planBadgeClasses = {
