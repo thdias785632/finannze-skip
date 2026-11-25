@@ -385,7 +385,7 @@ routerAdd('POST', '/backend/v1/whatsapp/webhook', (c) => {
    * o nome citado com o cadastro real. Erros de runtime/config são LOGADOS e
    * devolvidos como {erro:'falha_agente'} — o chamador cai no fallback regex.
    */
-  function interpretarComAgente(texto, nomesCartoes) {
+  function interpretarComAgente(texto, nomesCartoes, userId) {
     const prompt =
       'Mensagem do usuário: ' +
       JSON.stringify(String(texto || '')) +
@@ -394,8 +394,13 @@ routerAdd('POST', '/backend/v1/whatsapp/webhook', (c) => {
       JSON.stringify(nomesCartoes || [])
     let resposta = ''
     try {
+      // O runtime do agente EXIGE user_id real (id de um registro de users) —
+      // null falha com "user_id and message are required". Passo o próprio
+      // usuário do WhatsApp e NÃO passo conversation_id: cada mensagem vira
+      // uma conversa nova, ou seja, classificação sem histórico (stateless
+      // na prática, sem custo de memória).
       const result = $ai.agent('whatsapp-lancamentos').chat({
-        user_id: null, // agente stateless de classificação — sem histórico
+        user_id: userId,
         message: prompt,
       })
       resposta = String((result && result.content) || '')
@@ -491,7 +496,7 @@ routerAdd('POST', '/backend/v1/whatsapp/webhook', (c) => {
       nomes = []
     }
 
-    const intento = interpretarComAgente(texto, nomes)
+    const intento = interpretarComAgente(texto, nomes, usuario.id)
     if (intento.erro) {
       if (intento.erro === 'sem_valor' || intento.erro === 'nao_lancamento') {
         console.log('[whatsapp_webhook] agente disse que não é lançamento:', intento.erro)
@@ -1076,54 +1081,4 @@ routerAdd('POST', '/backend/v1/whatsapp/webhook', (c) => {
     console.error('[whatsapp_webhook] erro no POST do webhook:', (err && err.message) || err)
     return c.json(200, { received: true, erro: true })
   }
-})
-
-/**
- * TEMPORÁRIO (teste de integração, remover após validar): rota de loopback que
- * alimenta o webhook com o MESMO payload da Meta, sem passar pelo WhatsApp.
- * Aceita ?texto=...&numero=<número vinculado em whatsapp_contas> e devolve o
- * JSON de decisão da rota real. Não grava nada além do que o próprio webhook
- * gravaria (transações/mensagens/pendências reais — limpar depois no painel).
- */
-routerAdd('GET', '/backend/v1/whatsapp/teste', (c) => {
-  const info = c.requestInfo()
-  const texto = String((info.query && info.query['texto']) || '')
-  const numero = String((info.query && info.query['numero']) || '')
-  if (!texto || !numero) {
-    return c.json(400, { error: 'informe ?texto=...&numero=...' })
-  }
-  const payload = {
-    entry: [
-      {
-        changes: [
-          {
-            value: {
-              messages: [
-                {
-                  id: 'teste_' + $security.randomString(10),
-                  from: numero,
-                  text: { body: texto },
-                },
-              ],
-            },
-          },
-        ],
-      },
-    ],
-  }
-  const req = new Request({
-    url: 'http://loopback.internal/teste',
-    method: 'POST',
-    body: JSON.stringify(payload),
-  })
-  req.headers.set('Content-Type', 'application/json')
-  const resp = $app.router().serve(req)
-  let corpo = ''
-  try {
-    corpo = String(resp.body())
-  } catch (_) {
-    corpo = '(corpo ilegível)'
-  }
-  console.log('[whatsapp_teste] loopback:', texto, '→', corpo)
-  return c.json(200, { texto: texto, webhook: corpo })
 })
