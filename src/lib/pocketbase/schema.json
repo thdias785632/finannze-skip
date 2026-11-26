@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-26T21:47:35.122Z",
+  "generatedAt": "2026-11-26T22:14:06.866Z",
   "collections": [
     {
       "name": "users",
@@ -103,8 +103,8 @@
       "name": "categorias",
       "type": "base",
       "apiRules": {
-        "list": "@request.auth.id != '' && (user_id = '' || user_id = @request.auth.id)",
-        "view": "@request.auth.id != '' && (user_id = '' || user_id = @request.auth.id)",
+        "list": "@request.auth.id != '' && (user_id = '' || user_id = @request.auth.id || transacoes_via_categoria_id.dividido_com.id ?= @request.auth.id)",
+        "view": "@request.auth.id != '' && (user_id = '' || user_id = @request.auth.id || transacoes_via_categoria_id.dividido_com.id ?= @request.auth.id)",
         "create": "@request.auth.id != '' && @request.body.user_id = @request.auth.id",
         "update": "@request.auth.id != '' && user_id = @request.auth.id",
         "delete": "@request.auth.id != '' && user_id = @request.auth.id"
@@ -166,7 +166,7 @@
         "list": "@request.auth.id != '' && (user_id = @request.auth.id || dividido_com.id ?= @request.auth.id)",
         "view": "@request.auth.id != '' && (user_id = @request.auth.id || dividido_com.id ?= @request.auth.id)",
         "create": "@request.auth.id != '' && @request.body.user_id = @request.auth.id",
-        "update": "@request.auth.id != '' && (user_id = @request.auth.id || dividido_com.id ?= @request.auth.id)",
+        "update": "@request.auth.id != '' && user_id = @request.auth.id",
         "delete": "@request.auth.id != '' && user_id = @request.auth.id"
       },
       "fields": [
@@ -779,8 +779,8 @@
         "list": "@request.auth.id != '' && (user_id = @request.auth.id || grupo_id.user_id = @request.auth.id || grupo_id.grupos_membros_via_grupo_id.user_id ?= @request.auth.id)",
         "view": "@request.auth.id != '' && (user_id = @request.auth.id || grupo_id.user_id = @request.auth.id || grupo_id.grupos_membros_via_grupo_id.user_id ?= @request.auth.id)",
         "create": "@request.auth.id != '' && @request.body.grupo_id.user_id = @request.auth.id",
-        "update": "@request.auth.id != '' && (grupo_id.user_id = @request.auth.id || user_id = @request.auth.id)",
-        "delete": "@request.auth.id != '' && (grupo_id.user_id = @request.auth.id || user_id = @request.auth.id)"
+        "update": "@request.auth.id != '' && (grupo_id.user_id = @request.auth.id || user_id = @request.auth.id || (status = 'pendente' && user_id = '' && email = @request.auth.email))",
+        "delete": "@request.auth.id != '' && (grupo_id.user_id = @request.auth.id || user_id = @request.auth.id || (status = 'pendente' && user_id = '' && email = @request.auth.email))"
       },
       "fields": [
         {
