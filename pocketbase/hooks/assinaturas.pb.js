@@ -128,7 +128,12 @@ cronAdd('assinaturas_cron', '0 */6 * * *', () => {
             : pendente.subscription
         let fim = null
         if (subId) {
-          const st = conector('STRIPE_GET_SUBSCRIPTION', { subscription_id: subId })
+          // catálogo do conector não tem "get subscription" por id solto: a
+          // busca é customer + subscription_exposed_id
+          const st = conector('STRIPE_GET_CUSTOMERS_CUSTOMER_SUBS_SUB_EXPOSED_ID', {
+            customer: rec.getString('stripe_customer_id'),
+            subscription_exposed_id: subId,
+          })
           fim =
             st && st.current_period_end
               ? new Date(st.current_period_end * 1000).toISOString()
@@ -161,7 +166,12 @@ cronAdd('assinaturas_cron', '0 */6 * * *', () => {
       try {
         const sub = rec.getString('stripe_subscription_id') || ''
         if (sub) {
-          const st = conector('STRIPE_GET_SUBSCRIPTION', { subscription_id: sub })
+          // catálogo do conector não tem "get subscription" por id solto: a
+          // busca é customer + subscription_exposed_id
+          const st = conector('STRIPE_GET_CUSTOMERS_CUSTOMER_SUBS_SUB_EXPOSED_ID', {
+            customer: rec.getString('stripe_customer_id'),
+            subscription_exposed_id: sub,
+          })
           const fim = st && st.current_period_end
           // ainda não venceu na Stripe (relógio local adiantado): não derruba
           if (fim && new Date(fim * 1000) > agora) {
@@ -215,7 +225,7 @@ routerAdd('POST', '/backend/v1/assinatura/checkout', (c) => {
       const centavos = PRECOS_CENTAVOS[plano]
       if (existente) {
         const precos = itens(
-          conector('STRIPE_GET_PRODUCTS_PRODUCT_PRICES', { product: existente.id }),
+          conector('STRIPE_LIST_PRICES', { product: existente.id, active: true, limit: 100 }),
         )
         const ativo = precos.find(function (pr) {
           return (
@@ -366,14 +376,21 @@ routerAdd('GET', '/backend/v1/assinatura/retorno', (c) => {
         limit: 10,
       }),
     )
+    // plano contratado: 1) metadata da própria sessão (gravado no checkout —
+    // caminho primário, sem chamadas extras); 2) fallback: line item → produto
+    // → metadata.plano (STRIPE_GET_PRODUCTS_ID, slug real do catálogo)
     const primeiro = listaItens[0]
     let plano = null
-    if (primeiro && primeiro.price && primeiro.price.product) {
+    const metaSessao = sessao.metadata || {}
+    if (metaSessao.user_id === auth.id && ORDEM.indexOf(metaSessao.plano) > 0) {
+      plano = metaSessao.plano
+    }
+    if (!plano && primeiro && primeiro.price && primeiro.price.product) {
       const produtoId =
         typeof primeiro.price.product === 'object'
           ? primeiro.price.product.id
           : primeiro.price.product
-      const produto = conector('STRIPE_GET_PRODUCT', { id: produtoId })
+      const produto = conector('STRIPE_GET_PRODUCTS_ID', { id: produtoId })
       const meta = produto && produto.metadata && produto.metadata.plano
       if (ORDEM.indexOf(meta) > 0) plano = meta
     }
