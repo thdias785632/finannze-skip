@@ -21,11 +21,6 @@
  *   - secrets via $secrets.get/$os.getenv (não usados aqui: conector owner).
  */
 
-// DIAGNÓSTICO TEMPORÁRIO (remover): prova que ESTE arquivo carregou no JSVM.
-routerAdd('GET', '/backend/v1/assinatura/diag', (c) => {
-  return c.json(200, { ok: true, build: 'diag1' })
-})
-
 routerAdd('GET', '/backend/v1/assinatura', (c) => {
   try {
     const auth = c.auth()
