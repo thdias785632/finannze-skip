@@ -55,10 +55,30 @@ export const DivisaoGrupo: React.FC<DivisaoGrupoProps> = ({
     }
   }, [])
 
-  // Quando desliga a divisão, limpa tudo.
+  /**
+   * Divide valorTotal igualmente entre a lista de user_ids passada, com o
+   * resíduo de centavos na ÚLTIMA pessoa (soma fecha exata em valorTotal).
+   */
+  const partesIguais = (ids: string[]): DivisaoMembro[] => {
+    const n = ids.length
+    if (n === 0 || valorTotal <= 0) return []
+    const parte = Math.floor((valorTotal / n) * 100) / 100
+    return ids.map((user_id, i) => ({
+      user_id,
+      valor: i === n - 1 ? Math.round((valorTotal - parte * (n - 1)) * 100) / 100 : parte,
+    }))
+  }
+
+  // Quando liga a divisão, TODOS os participantes entram com valor igual
+  // (comportamento padrão pedido: valor já dividido entre todos). Ao desligar,
+  // limpa tudo.
   const alternar = (ligado: boolean) => {
     setAtivo(ligado)
-    if (!ligado) onChange([])
+    if (!ligado) {
+      onChange([])
+    } else {
+      onChange(partesIguais(membros.map((m) => m.user_id)))
+    }
   }
 
   // Liga automaticamente quando carrega com divisão já gravada (edição).
@@ -68,9 +88,7 @@ export const DivisaoGrupo: React.FC<DivisaoGrupoProps> = ({
 
   /** Liga/divide igualmente entre todos os membros (o dono fica com o resto). */
   const dividirIgual = () => {
-    if (membros.length === 0 || valorTotal <= 0) return
-    const parte = Math.floor((valorTotal / membros.length) * 100) / 100
-    onChange(membros.map((m) => ({ user_id: m.user_id, valor: parte })))
+    onChange(partesIguais(membros.map((m) => m.user_id)))
   }
 
   const setValor = (user_id: string, v: number) => {
@@ -79,10 +97,14 @@ export const DivisaoGrupo: React.FC<DivisaoGrupoProps> = ({
 
   const alternarMembro = (user_id: string, ligado: boolean) => {
     if (ligado) {
-      const parte = Math.floor((valorTotal / (valor.length + 1)) * 100) / 100
-      onChange([...valor, { user_id, valor: parte }])
+      // Entrou no grupo da divisão: redistribui igualmente entre todos os
+      // selecionados, incluindo ele (resíduo de centavos na última linha).
+      const selecionados = [...valor.map((d) => d.user_id), user_id]
+      onChange(partesIguais(selecionados))
     } else {
-      onChange(valor.filter((d) => d.user_id !== user_id))
+      // Saiu: redistribui igualmente entre os que restaram.
+      const restantes = valor.filter((d) => d.user_id !== user_id).map((d) => d.user_id)
+      onChange(partesIguais(restantes))
     }
   }
 
@@ -147,8 +169,14 @@ export const DivisaoGrupo: React.FC<DivisaoGrupoProps> = ({
                     </label>
                     {selecionado && (
                       <div className="flex items-center gap-1 shrink-0">
-                        <span className="text-[10px] text-gray-400">R$</span>
+                        <label
+                          className="text-[10px] text-gray-400"
+                          htmlFor={`div-valor-${m.user_id}`}
+                        >
+                          R$
+                        </label>
                         <input
+                          id={`div-valor-${m.user_id}`}
                           type="number"
                           inputMode="decimal"
                           step="0.01"

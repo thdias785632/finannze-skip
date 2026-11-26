@@ -130,13 +130,15 @@ export const transacoesService = {
       await pb.collection('transacoes').update(transacaoId, { dividido_com: [] })
       return
     }
-    await pb
-      .collection('transacoes_divisoes')
-      .create(
-        membros
-          .filter((m) => m.user_id && m.valor > 0)
-          .map((m) => ({ transacao_id: transacaoId, user_id: m.user_id, valor: m.valor })),
-      )
+    // A API aceita UM registro por create — um array de objetos gera 400 e
+    // nada é gravado. Um create por linha de divisão.
+    for (const m of membros.filter((m) => m.user_id && m.valor > 0)) {
+      await pb.collection('transacoes_divisoes').create({
+        transacao_id: transacaoId,
+        user_id: m.user_id,
+        valor: m.valor,
+      })
+    }
     await pb.collection('transacoes').update(transacaoId, {
       dividido_com: membros.map((m) => m.user_id),
     })
