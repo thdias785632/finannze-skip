@@ -44,7 +44,9 @@ function normalizar(dados: unknown): EstadoAssinatura {
 
 /** Consulta o estado da assinatura do usuário logado. */
 export async function consultarAssinatura(): Promise<EstadoAssinatura> {
-  const resp = await fetch(rota('/'), {
+  // sem barra final: o PocketBase registra a rota como /assinatura (sem /) e
+  // uma chamada com barra cai no static file server como 404 "File not found."
+  const resp = await fetch(rota(''), {
     headers: { Authorization: pb.authStore.token },
   })
   if (!resp.ok) return normalizar(null)

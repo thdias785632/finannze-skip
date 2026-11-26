@@ -21,15 +21,41 @@
  *   - secrets via $secrets.get/$os.getenv (não usados aqui: conector owner).
  */
 
-const CRON_ASSINATURA = '0 */6 * * *' // a cada 6h
+// DIAGNÓSTICO TEMPORÁRIO (remover): prova que ESTE arquivo carregou no JSVM.
+routerAdd('GET', '/backend/v1/assinatura/diag', (c) => {
+  return c.json(200, { ok: true, build: 'diag1' })
+})
 
-cronAdd(CRON_ASSINATURA, () => {
+routerAdd('GET', '/backend/v1/assinatura', (c) => {
+  try {
+    const auth = c.auth()
+    if (!auth || !auth.id) return c.json(401, { error: 'Não autenticado' })
+    const rec = $app.findRecordById('users', auth.id)
+    const status = rec.getString('stripe_status') || ''
+    const plano = rec.getString('stripe_plano') || ''
+    const sub = rec.getString('stripe_subscription_id') || ''
+    const fim = rec.getDateTime('stripe_periodo_fim')
+    return c.json(200, {
+      ativa: (status === 'active' || status === 'canceling') && !!sub,
+      cancelando: status === 'canceling' || rec.getBool('stripe_cancelar'),
+      plano: plano,
+      status: status,
+      periodoFim: fim && !fim.isZero() ? fim.string() : null,
+      subscriptionId: sub,
+    })
+  } catch (err) {
+    console.error('[assinaturas] erro no estado:', (err && err.message) || err)
+    return c.json(500, { error: 'Falha ao consultar assinatura' })
+  }
+})
+
+cronAdd('assinaturas_cron', '0 */6 * * *', () => {
   try {
     const ORDEM = ['basico', 'bronze', 'prata', 'ouro']
 
     function conector(tool, args) {
       const res = $connectors.executeAsOwner(tool, args || {})
-      if (res && res.successful) return res.data
+      if (res && res.successful && res.data) return res.data
       const detalhe = res && res.error ? res.error : JSON.stringify(res)
       throw new Error('Stripe (' + tool + '): ' + detalhe)
     }
@@ -71,7 +97,15 @@ cronAdd(CRON_ASSINATURA, () => {
           status: 'complete',
           limit: 20,
         })
-        const pendente = ((sessoes && sessoes.data) || []).find(function (s) {
+        const pendente = (
+          sessoes && Array.isArray(sessoes)
+            ? sessoes
+            : sessoes && sessoes.data
+              ? Array.isArray(sessoes.data)
+                ? sessoes.data
+                : []
+              : []
+        ).find(function (s) {
           return (
             s.metadata &&
             s.metadata.user_id === rec.id &&
@@ -143,51 +177,40 @@ cronAdd(CRON_ASSINATURA, () => {
   }
 })
 
-routerAdd('GET', '/backend/v1/assinatura', (c) => {
-  try {
-    const auth = c.auth()
-    if (!auth || !auth.id) return c.json(401, { error: 'Não autenticado' })
-    const rec = $app.findRecordById('users', auth.id)
-    const status = rec.getString('stripe_status') || ''
-    const plano = rec.getString('stripe_plano') || ''
-    const sub = rec.getString('stripe_subscription_id') || ''
-    const fim = rec.getDateTime('stripe_periodo_fim')
-    return c.json(200, {
-      ativa: (status === 'active' || status === 'canceling') && !!sub,
-      cancelando: status === 'canceling' || rec.getBool('stripe_cancelar'),
-      plano: plano,
-      status: status,
-      periodoFim: fim && !fim.isZero() ? fim.string() : null,
-      subscriptionId: sub,
-    })
-  } catch (err) {
-    console.error('[assinaturas] erro no estado:', (err && err.message) || err)
-    return c.json(500, { error: 'Falha ao consultar assinatura' })
-  }
-})
-
 routerAdd('POST', '/backend/v1/assinatura/checkout', (c) => {
   try {
     const PRECOS_CENTAVOS = { bronze: 1499, prata: 2499, ouro: 2999 }
     const NOMES = { bronze: 'Quitafy Bronze', prata: 'Quitafy Prata', ouro: 'Quitafy Ouro' }
 
+    // O conector devolve { successful, data, error } e o data é o ENVELOPE do
+    // Stripe ({ object: 'list', data: [...], ... } ou o próprio objeto Stripe).
     function conector(tool, args) {
       const res = $connectors.executeAsOwner(tool, args || {})
-      if (res && res.successful) return res.data
+      if (res && res.successful && res.data) return res.data
       const detalhe = res && res.error ? res.error : JSON.stringify(res)
       throw new Error('Stripe (' + tool + '): ' + detalhe)
     }
 
+    // Envelope de lista do Stripe: { object: 'list', data: [...] }
+    function itens(res) {
+      if (!res) return []
+      if (Array.isArray(res)) return res
+      if (res.data && Array.isArray(res.data)) return res.data
+      return []
+    }
+
     function precoDoPlano(plano) {
       const lista = conector('STRIPE_LIST_PRODUCTS', { limit: 100 })
-      const produtos = (lista && lista.data) || []
+      const produtos = itens(lista)
       const existente = produtos.find(function (p) {
         return p.metadata && p.metadata.plano === plano && p.metadata.app === 'quitafy'
       })
       const centavos = PRECOS_CENTAVOS[plano]
       if (existente) {
-        const precos = conector('STRIPE_GET_PRODUCTS_PRODUCT_PRICES', { product: existente.id })
-        const ativo = ((precos && precos.data) || []).find(function (pr) {
+        const precos = itens(
+          conector('STRIPE_GET_PRODUCTS_PRODUCT_PRICES', { product: existente.id }),
+        )
+        const ativo = precos.find(function (pr) {
           return (
             pr.active &&
             pr.currency === 'brl' &&
@@ -219,8 +242,7 @@ routerAdd('POST', '/backend/v1/assinatura/checkout', (c) => {
     }
 
     function clienteStripe(email, nome) {
-      const lista = conector('STRIPE_LIST_CUSTOMERS', { email: email, limit: 10 })
-      const achado = ((lista && lista.data) || [])[0]
+      const achado = itens(conector('STRIPE_LIST_CUSTOMERS', { email: email, limit: 10 }))[0]
       if (achado) return achado.id
       const novo = conector('STRIPE_CREATE_CUSTOMER', {
         email: email,
@@ -274,9 +296,17 @@ routerAdd('GET', '/backend/v1/assinatura/retorno', (c) => {
 
     function conector(tool, args) {
       const res = $connectors.executeAsOwner(tool, args || {})
-      if (res && res.successful) return res.data
+      if (res && res.successful && res.data) return res.data
       const detalhe = res && res.error ? res.error : JSON.stringify(res)
       throw new Error('Stripe (' + tool + '): ' + detalhe)
+    }
+
+    // Envelope de lista do Stripe: { object: 'list', data: [...] }
+    function itens(res) {
+      if (!res) return []
+      if (Array.isArray(res)) return res
+      if (res.data && Array.isArray(res.data)) return res.data
+      return []
     }
 
     function ativarAssinatura(userId, dados) {
@@ -319,11 +349,13 @@ routerAdd('GET', '/backend/v1/assinatura/retorno', (c) => {
     }
 
     // plano contratado: line item → produto → metadata.plano
-    const itens = conector('STRIPE_GET_CHECKOUT_SESSIONS_SESSION_LINE_ITEMS', {
-      session: sessao.id,
-      limit: 10,
-    })
-    const primeiro = ((itens && itens.data) || [])[0]
+    const listaItens = itens(
+      conector('STRIPE_GET_CHECKOUT_SESSIONS_SESSION_LINE_ITEMS', {
+        session: sessao.id,
+        limit: 10,
+      }),
+    )
+    const primeiro = listaItens[0]
     let plano = null
     if (primeiro && primeiro.price && primeiro.price.product) {
       const produtoId =
@@ -370,7 +402,7 @@ routerAdd('POST', '/backend/v1/assinatura/cancelar', (c) => {
 
     function conector(tool, args) {
       const res = $connectors.executeAsOwner(tool, args || {})
-      if (res && res.successful) return res.data
+      if (res && res.successful && res.data) return res.data
       const detalhe = res && res.error ? res.error : JSON.stringify(res)
       throw new Error('Stripe (' + tool + '): ' + detalhe)
     }
