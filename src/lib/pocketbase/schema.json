@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-26T02:32:56.984Z",
+  "generatedAt": "2026-11-26T02:48:15.404Z",
   "collections": [
     {
       "name": "users",
@@ -84,6 +84,12 @@
         {
           "name": "stripe_cancelar",
           "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "stripe_inicio",
+          "type": "date",
           "required": false,
           "system": false
         }

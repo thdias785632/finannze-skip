@@ -121,17 +121,34 @@ export const PlansPage: React.FC = () => {
   }
 
   const cancelar = async () => {
-    if (!confirm('Cancelar a assinatura? O plano continua ativo até o fim do período já pago.')) {
+    const dentro = assinatura?.arrependimento?.dentro === true
+    const dias = assinatura?.arrependimento?.diasRestantes ?? 0
+    const msg = dentro
+      ? `Você está dentro do prazo de arrependimento (${dias} ${dias === 1 ? 'dia' : 'dias'} restantes). A assinatura será cancelada IMEDIATAMENTE, o valor pago será reembolsado integralmente e o plano volta para o Básico agora. Confirmar?`
+      : 'Cancelar a assinatura? O plano continua ativo até o fim do período já pago; depois, a conta volta para o Básico.'
+    if (!confirm(msg)) {
       return
     }
     setPlanoEmAcao(planoAtual)
     try {
-      const estado = await cancelarAssinatura()
-      setAssinatura(estado)
-      toast({
-        title: 'Cancelamento agendado',
-        description: `O plano vale até ${formatoData(estado.periodoFim) || 'o fim do período pago'}; depois, volta ao Básico.`,
-      })
+      const resultado = await cancelarAssinatura()
+      setAssinatura(resultado.estado)
+      if (resultado.arrependimento) {
+        toast({
+          title: 'Assinatura cancelada e reembolso solicitado',
+          description:
+            resultado.reembolsoPendente || resultado.aviso
+              ? resultado.aviso ||
+                'Seu plano já voltou para o Básico. O reembolso integral será processado em até 5–10 dias úteis.'
+              : 'Seu plano voltou para o Básico. O reembolso integral será processado em até 5–10 dias úteis.',
+        })
+        await refresh()
+      } else {
+        toast({
+          title: 'Cancelamento agendado',
+          description: `O plano vale até ${formatoData(resultado.estado.periodoFim) || 'o fim do período pago'}; depois, volta ao Básico.`,
+        })
+      }
     } catch (err) {
       toast({
         title: 'Não foi possível cancelar',
@@ -259,16 +276,50 @@ export const PlansPage: React.FC = () => {
                           Próxima renovação: {formatoData(assinatura.periodoFim)}
                         </p>
                       )}
-                      {!assinatura?.cancelando && (
-                        <button
-                          type="button"
-                          onClick={cancelar}
-                          disabled={emAcao}
-                          className="mt-1 text-[11px] font-semibold text-red-600 hover:underline disabled:opacity-50"
-                        >
-                          {emAcao ? 'Cancelando…' : 'Cancelar assinatura'}
-                        </button>
+                      {!assinatura?.cancelando && assinatura?.arrependimento?.dentro && (
+                        <p className="mt-1 text-[11px] text-gray-500 leading-relaxed">
+                          Cancelando agora, o valor pago é{' '}
+                          <strong>reembolsado integralmente</strong> e o plano volta para o Básico
+                          imediatamente.
+                        </p>
                       )}
+                      {!assinatura?.cancelando && !assinatura?.arrependimento?.dentro && (
+                        <p className="mt-1 text-[11px] text-gray-500 leading-relaxed">
+                          O cancelamento interrompe a renovação: o plano mantém os benefícios até o
+                          fim do período pago, depois volta para o Básico.
+                        </p>
+                      )}
+                      {!assinatura?.cancelando &&
+                        (assinatura?.arrependimento?.dentro ? (
+                          <div className="mt-1">
+                            <p className="text-[11px] font-semibold text-amber-700">
+                              Direito de arrependimento: {assinatura.arrependimento.diasRestantes}{' '}
+                              {assinatura.arrependimento.diasRestantes === 1 ? 'dia' : 'dias'}
+                              {assinatura.arrependimento.fim
+                                ? ` (até ${formatoData(assinatura.arrependimento.fim)})`
+                                : ''}
+                            </p>
+                            <button
+                              type="button"
+                              onClick={cancelar}
+                              disabled={emAcao}
+                              className="mt-1 text-[11px] font-semibold text-red-600 hover:underline disabled:opacity-50"
+                            >
+                              {emAcao
+                                ? 'Cancelando…'
+                                : 'Cancelar e reembolsar (direito de arrependimento — 7 dias)'}
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={cancelar}
+                            disabled={emAcao}
+                            className="mt-1 text-[11px] font-semibold text-red-600 hover:underline disabled:opacity-50"
+                          >
+                            {emAcao ? 'Cancelando…' : 'Cancelar assinatura (renovação)'}
+                          </button>
+                        ))}
                     </div>
                   </div>
                 )}

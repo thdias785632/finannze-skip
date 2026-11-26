@@ -7,8 +7,11 @@
  *   GET  /backend/v1/assinatura           — estado da assinatura do usuário
  *   POST /backend/v1/assinatura/checkout  — cria a Checkout Session e devolve url
  *   GET  /backend/v1/assinatura/retorno   — volta do Stripe; ativa o plano
- *   POST /backend/v1/assinatura/cancelar  — não renova (cai p/ básico no fim)
  * Cron a cada 6h: garante ativação de sessão paga sem retorno e queda p/ básico.
+ *
+ * O cancelamento (POST /backend/v1/assinatura/cancelar) com o ramo do direito
+ * de arrependimento do CDC (art. 49 — 7 dias) vive em
+ * pocketbase/hooks/assinatura_cancelamento.pb.js (mesmo diretório pb_hooks).
  *
  * Ativação é idempotente: roda no retorno do checkout (navegação de success_url)
  * e no cron (checkout.session.completed não chega por webhook aqui — o app
@@ -33,6 +36,30 @@ routerAdd('GET', '/backend/v1/assinatura', (c) => {
     const plano = rec.getString('stripe_plano') || ''
     const sub = rec.getString('stripe_subscription_id') || ''
     const fim = rec.getDateTime('stripe_periodo_fim')
+
+    // Data de início da assinatura (base do prazo de 7 dias do arrependimento,
+    // CDC art. 49): stripe_inicio → fallback created (cadastro).
+    function dataIso(dt) {
+      if (!dt || typeof dt.string !== 'function') return ''
+      if (typeof dt.isZero === 'function' && dt.isZero()) return ''
+      return dt.string()
+    }
+    const inicio = dataIso(rec.getDateTime('stripe_inicio')) || dataIso(rec.getDateTime('created'))
+
+    function prazoArrependimento(inicioIso) {
+      if (!inicioIso) return { dentro: false, diasRestantes: 0, fim: null }
+      const t = new Date(inicioIso).getTime()
+      if (Number.isNaN(t)) return { dentro: false, diasRestantes: 0, fim: null }
+      const fimPrazo = new Date(t + 7 * 24 * 60 * 60 * 1000)
+      const restante = fimPrazo.getTime() - Date.now()
+      return {
+        dentro: restante > 0,
+        diasRestantes: restante <= 0 ? 0 : Math.ceil(restante / (24 * 60 * 60 * 1000)),
+        fim: fimPrazo.toISOString(),
+      }
+    }
+    const prazo = prazoArrependimento(inicio)
+
     return c.json(200, {
       ativa: (status === 'active' || status === 'canceling') && !!sub,
       cancelando: status === 'canceling' || rec.getBool('stripe_cancelar'),
@@ -45,6 +72,12 @@ routerAdd('GET', '/backend/v1/assinatura', (c) => {
             : fim.string()
           : null,
       subscriptionId: sub,
+      inicio: inicio,
+      arrependimento: {
+        dentro: prazo.dentro,
+        diasRestantes: prazo.diasRestantes,
+        fim: prazo.fim,
+      },
     })
   } catch (err) {
     console.error(
@@ -76,6 +109,14 @@ cronAdd('assinaturas_cron', '0 */6 * * *', () => {
       rec.set('stripe_periodo_fim', dados.periodoFim || null)
       rec.set('stripe_cancelar', false)
       rec.set('plan', dados.plano)
+      // início da assinatura = base do prazo de 7 dias do arrependimento
+      // (CDC art. 49): só grava na PRIMEIRA ativação (renovação não reinicia
+      // o prazo); fallback é created (feito na leitura).
+      if (dados.inicio) {
+        rec.set('stripe_inicio', dados.inicio)
+      } else if (!rec.getString('stripe_inicio')) {
+        rec.set('stripe_inicio', new Date().toISOString())
+      }
       $app.save(rec)
       console.log(
         '[assinaturas] plano ' +
@@ -145,6 +186,11 @@ cronAdd('assinaturas_cron', '0 */6 * * *', () => {
           status: 'active',
           plano: pendente.metadata.plano,
           periodoFim: fim,
+          // data da sessão paga = início da assinatura (prazo de 7 dias)
+          inicio:
+            pendente.created && Number.isFinite(Number(pendente.created))
+              ? new Date(Number(pendente.created) * 1000).toISOString()
+              : null,
         })
       } catch (e) {
         console.error(
@@ -409,6 +455,12 @@ routerAdd('GET', '/backend/v1/assinatura/retorno', (c) => {
       status: 'active',
       plano: plano,
       periodoFim: periodoFim,
+      // data da sessão paga = início da assinatura (prazo de 7 dias,
+      // CDC art. 49) — só grava na primeira ativação (ver ativarAssinatura)
+      inicio:
+        sessao.created && Number.isFinite(Number(sessao.created))
+          ? new Date(Number(sessao.created) * 1000).toISOString()
+          : null,
     })
     return c.json(200, { ativado: true, plano: plano })
   } catch (err) {
@@ -418,59 +470,6 @@ routerAdd('GET', '/backend/v1/assinatura/retorno', (c) => {
       (err && err.stack) || '',
     )
     return c.json(502, { error: (err && err.message) || 'Falha ao ativar assinatura' })
-  }
-})
-
-routerAdd('POST', '/backend/v1/assinatura/cancelar', (c) => {
-  try {
-    const auth = typeof c.auth === 'function' ? c.auth() : c.auth
-    if (!auth || !auth.id) return c.json(401, { error: 'Não autenticado' })
-    const rec = $app.findRecordById('users', auth.id)
-    const status = rec.getString('stripe_status') || ''
-    const sub = rec.getString('stripe_subscription_id') || ''
-    if (!((status === 'active' || status === 'canceling') && sub)) {
-      return c.json(400, { error: 'Sem assinatura ativa' })
-    }
-
-    function conector(tool, args) {
-      const res = $connectors.executeAsOwner(tool, args || {})
-      if (res && res.successful && res.data) return res.data
-      const detalhe = res && res.error ? res.error : JSON.stringify(res)
-      throw new Error('Stripe (' + tool + '): ' + detalhe)
-    }
-
-    // cancel_at_period_end: vale até o fim do período já pago e depois cai
-    // para basico — tanto no Stripe quanto no registro local
-    conector('STRIPE_UPDATE_SUBSCRIPTION', {
-      subscription_id: sub,
-      cancel_at_period_end: true,
-    })
-    rec.set('stripe_status', 'canceling')
-    rec.set('stripe_cancelar', true)
-    $app.save(rec)
-    console.log('[assinaturas] cancelamento pedido: usuário ' + auth.id)
-
-    const fim = rec.getDateTime('stripe_periodo_fim')
-    return c.json(200, {
-      ativa: true,
-      cancelando: true,
-      plano: rec.getString('stripe_plano') || '',
-      status: 'canceling',
-      periodoFim:
-        fim && typeof fim.string === 'function'
-          ? fim.isZero && typeof fim.isZero === 'function' && fim.isZero()
-            ? null
-            : fim.string()
-          : null,
-      subscriptionId: sub,
-    })
-  } catch (err) {
-    console.error(
-      '[assinaturas] erro ao cancelar:',
-      (err && err.message) || err,
-      (err && err.stack) || '',
-    )
-    return c.json(502, { error: (err && err.message) || 'Falha ao cancelar assinatura' })
   }
 })
 
