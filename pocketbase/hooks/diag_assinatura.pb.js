@@ -1,78 +1,71 @@
 /**
- * DIAGNÓSTICO TEMPORÁRIO — rota GET /diag/assinatura-check.
- * Faz loopback autenticado do POST /backend/v1/assinatura/checkout (cria um
- * usuário de teste temporário, loga e chama o checkout como ele) e registra
- * status + corpo da resposta. REMOVER na próxima rodada.
+ * DIAGNÓSTICO TEMPORÁRIO — rota GET /diag/assinatura-check + cron 1 min.
+ * Sonda o binding $connectors no JSVM: lista TODAS as chaves, tenta chamar
+ * executeAsOwner em diferentes formas (2 args, 3 args) contra uma ferramenta
+ * de leitura inofensiva (STRIPE_LIST_PRODUCTS) e imprime o resultado.
+ * REMOVER na próxima rodada.
  */
 
 routerAdd('GET', '/diag/assinatura-check', (c) => {
-  const instancia = $os.getenv('PB_INSTANCE_URL')
-  if (!instancia) {
-    return c.json(500, { error: 'PB_INSTANCE_URL não configurado' })
-  }
-  const base = instancia.replace(/\/$/, '')
+  const resultado = {}
 
-  // 1. cria (ou reusa) um usuário de teste só para este diagnóstico
-  const email = 'diag-assinatura@quitafy-teste.com'
-  let userId = ''
+  // 1. todas as chaves do binding (string única, sem truncar)
+  const chaves = []
+  for (const k in $connectors) chaves.push(k + ':' + typeof $connectors[k])
+  resultado.chaves = chaves.join(' | ')
+
+  // 2. forma A: executeAsOwner(tool, args) — a que o hook usa hoje
   try {
-    const existente = $app.findAuthRecordByEmail('users', email)
-    userId = existente.id
-  } catch (_) {
-    const users = $app.findCollectionByNameOrId('users')
-    const rec = new Record(users)
-    rec.setEmail(email)
-    rec.setPassword('senha-teste-123')
-    rec.setVerified(true)
-    rec.set('name', 'Diagnóstico Assinatura')
-    rec.set('telefone', '+55118' + String(Date.now()).slice(-8))
-    rec.set('plan', 'basico')
-    $app.save(rec)
-    userId = rec.id
+    const resA = $connectors.executeAsOwner('STRIPE_LIST_PRODUCTS', { limit: 5 })
+    let vistoA = ''
+    try {
+      vistoA = JSON.stringify(resA)
+    } catch (_) {
+      vistoA = '(não serializável)'
+    }
+    resultado.formaA_2args = vistoA
+  } catch (e) {
+    resultado.formaA_2args = 'ERRO: ' + ((e && e.message) || e)
   }
 
-  // 2. loga e chama o checkout como esse usuário (loopback HTTP)
-  const login = $http.send({
-    url: base + '/api/collections/users/auth-with-password',
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ identity: email, password: 'senha-teste-123' }),
-  })
-  if (login.statusCode !== 200) {
-    return c.json(200, { etapa: 'login', statusCode: login.statusCode, body: login.json })
-  }
-  const token = login.json && login.json.token
-
-  const checkout = $http.send({
-    url: base + '/backend/v1/assinatura/checkout',
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: token,
-      Origin: 'https://quitafy-teste.local',
-    },
-    body: JSON.stringify({ plano: 'bronze' }),
-  })
-
-  // forma real do binding $connectors neste JSVM
-  const forma = {
-    tipo: typeof $connectors,
-    chaves: (() => {
-      const ch = []
-      for (const k in $connectors) ch.push(k + ':' + typeof $connectors[k])
-      return ch
-    })(),
+  // 3. forma B: executeAsOwner(toolkit, tool, args)
+  try {
+    const resB = $connectors.executeAsOwner('stripe', 'STRIPE_LIST_PRODUCTS', { limit: 5 })
+    let vistoB = ''
+    try {
+      vistoB = JSON.stringify(resB)
+    } catch (_) {
+      vistoB = '(não serializável)'
+    }
+    resultado.formaB_3args = vistoB
+  } catch (e) {
+    resultado.formaB_3args = 'ERRO: ' + ((e && e.message) || e)
   }
 
-  return c.json(200, {
-    etapa: 'checkout',
-    statusCode: checkout.statusCode,
-    body: checkout.json,
-    connectors: forma,
-  })
+  // 4. forma C: execute(tool, args) — modo usuário, só para comparar o erro
+  try {
+    const resC = $connectors.execute('STRIPE_LIST_PRODUCTS', { limit: 5 })
+    let vistoC = ''
+    try {
+      vistoC = JSON.stringify(resC)
+    } catch (_) {
+      vistoC = '(não serializável)'
+    }
+    resultado.formaC_execute = vistoC
+  } catch (e) {
+    resultado.formaC_execute = 'ERRO: ' + ((e && e.message) || e)
+  }
+
+  // 5. status do toolkit stripe (diz se o dono tem a conta conectada)
+  try {
+    resultado.status = JSON.stringify($connectors.status())
+  } catch (e) {
+    resultado.status = 'ERRO: ' + ((e && e.message) || e)
+  }
+
+  return c.json(200, resultado)
 })
 
-// loga o resultado a cada minuto: valido por list_logs (o budget de fetch_url acabou)
 cronAdd('diag_assinatura_cron', '*/1 * * * *', () => {
   const instancia = $os.getenv('PB_INSTANCE_URL')
   if (!instancia) return
