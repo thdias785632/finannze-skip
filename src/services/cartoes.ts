@@ -7,6 +7,7 @@ const mapCartao = (r: Record<string, unknown>): Cartao => {
     user_id: string
     nome: string
     dia_vencimento: number
+    fechamento_ajustado?: string
     cor?: string
     created: string
     updated: string
@@ -16,6 +17,7 @@ const mapCartao = (r: Record<string, unknown>): Cartao => {
     user_id: rec.user_id,
     nome: rec.nome,
     dia_vencimento: Number(rec.dia_vencimento),
+    fechamento_ajustado: rec.fechamento_ajustado || undefined,
     cor: rec.cor,
     created: rec.created,
     updated: rec.updated,
@@ -46,7 +48,12 @@ export const cartoesService = {
 
   async update(
     id: string,
-    data: Partial<{ nome: string; dia_vencimento: number; cor?: string }>,
+    data: Partial<{
+      nome: string
+      dia_vencimento: number
+      cor?: string
+      fechamento_ajustado: string | null
+    }>,
   ): Promise<Cartao> {
     const r = await pb.collection('cartoes').update(id, data)
     return mapCartao(r)

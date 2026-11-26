@@ -4,8 +4,9 @@ import { BottomNav } from '@/components/BottomNav'
 import { LogoLoader } from '@/components/LogoLoader'
 import { transacoesService, mesDaFatura, rotuloFatura } from '@/services/transacoes'
 import { cartoesService } from '@/services/cartoes'
+import { ajusteFechamentoDoMes, salvarAjusteFechamento } from '@/services/fechamentoAjuste'
 import type { Cartao, Transacao } from '@/types/financial'
-import { CreditCard, Plus, X, Trash2, Pencil } from 'lucide-react'
+import { CreditCard, Plus, X, Trash2, Pencil, CalendarClock, RotateCcw } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from '@/hooks/use-toast'
 import { formatBRLPublic } from '@/lib/format'
@@ -16,8 +17,9 @@ import {
 
 /**
  * Tela de Cartões — lista os cartões do usuário com o resumo das faturas
- * (mês atual e próximo, já considerando a regra do vencimento) e permite
- * adicionar novos cartões (nome + dia de vencimento).
+ * (mês atual e próximo, já considerando a regra do fechamento) e permite
+ * adicionar, EDITAR (nome + dia de fechamento) e definir um ajuste pontual
+ * de fechamento só para o mês atual.
  */
 export const CartoesPage: React.FC = () => {
   const navigate = useNavigate()
@@ -28,8 +30,19 @@ export const CartoesPage: React.FC = () => {
 
   // Formulário de novo cartão
   const [nomeCartao, setNomeCartao] = useState('')
-  const [diaVenc, setDiaVenc] = useState('10')
+  const [diaFech, setDiaFech] = useState('10')
   const [saving, setSaving] = useState(false)
+
+  // Edição de cartão existente (nome + dia de fechamento)
+  const [editandoId, setEditandoId] = useState<string | null>(null)
+  const [nomeEdicao, setNomeEdicao] = useState('')
+  const [diaFechEdicao, setDiaFechEdicao] = useState('10')
+  const [savingEdicao, setSavingEdicao] = useState(false)
+
+  // Ajuste pontual do fechamento (só para o mês atual)
+  const [cartaoAjuste, setCartaoAjuste] = useState<Cartao | null>(null)
+  const [diaAjuste, setDiaAjuste] = useState('10')
+  const [savingAjuste, setSavingAjuste] = useState(false)
 
   // Exclusão de despesa de cartão (dialog de escopo p/ parceladas)
   const [alvoExclusao, setAlvoExclusao] = useState<Transacao | null>(null)
@@ -60,20 +73,20 @@ export const CartoesPage: React.FC = () => {
   const faturasDoCartao = (cartaoId: string) => transacoes.filter((t) => t.cartao_id === cartaoId)
 
   const salvarCartao = async () => {
-    const dia = Number(diaVenc)
+    const dia = Number(diaFech)
     if (!nomeCartao.trim()) {
       toast({ variant: 'destructive', title: 'Informe o nome do cartão' })
       return
     }
     if (!dia || dia < 1 || dia > 28) {
-      toast({ variant: 'destructive', title: 'Dia de vencimento deve ser entre 1 e 28' })
+      toast({ variant: 'destructive', title: 'Dia de fechamento deve ser entre 1 e 28' })
       return
     }
     setSaving(true)
     try {
       await cartoesService.create({ nome: nomeCartao.trim(), dia_vencimento: dia })
       setNomeCartao('')
-      setDiaVenc('10')
+      setDiaFech('10')
       setShowAdd(false)
       toast({ title: 'Cartão adicionado' })
       await load()
@@ -86,6 +99,74 @@ export const CartoesPage: React.FC = () => {
 
   const abrirEdicao = (id: string) => {
     navigate(`/editar-transacao/${id}`, { state: { from: '/cartoes' } })
+  }
+
+  const iniciarEdicaoCartao = (cartao: Cartao) => {
+    setEditandoId(cartao.id)
+    setNomeEdicao(cartao.nome)
+    setDiaFechEdicao(String(cartao.dia_vencimento))
+  }
+
+  const salvarEdicaoCartao = async () => {
+    if (!editandoId) return
+    const dia = Number(diaFechEdicao)
+    if (!nomeEdicao.trim()) {
+      toast({ variant: 'destructive', title: 'Informe o nome do cartão' })
+      return
+    }
+    if (!dia || dia < 1 || dia > 28) {
+      toast({ variant: 'destructive', title: 'Dia de fechamento deve ser entre 1 e 28' })
+      return
+    }
+    setSavingEdicao(true)
+    try {
+      await cartoesService.update(editandoId, { nome: nomeEdicao.trim(), dia_vencimento: dia })
+      setEditandoId(null)
+      toast({ title: 'Cartão atualizado' })
+      await load()
+    } catch {
+      toast({ variant: 'destructive', title: 'Erro ao salvar cartão' })
+    } finally {
+      setSavingEdicao(false)
+    }
+  }
+
+  const abrirAjuste = (cartao: Cartao) => {
+    setCartaoAjuste(cartao)
+    setDiaAjuste(String(cartao.dia_vencimento))
+  }
+
+  const salvarAjuste = async () => {
+    if (!cartaoAjuste) return
+    const dia = Number(diaAjuste)
+    if (!dia || dia < 1 || dia > 28) {
+      toast({ variant: 'destructive', title: 'Dia de fechamento deve ser entre 1 e 28' })
+      return
+    }
+    setSavingAjuste(true)
+    try {
+      await salvarAjusteFechamento(cartaoAjuste, mesAtual, dia)
+      toast({ title: 'Fechamento deste mês ajustado' })
+      setCartaoAjuste(null)
+      await load()
+    } catch {
+      toast({ variant: 'destructive', title: 'Erro ao ajustar fechamento' })
+    } finally {
+      setSavingAjuste(false)
+    }
+  }
+
+  const reverterAjuste = async (cartao: Cartao) => {
+    setSavingAjuste(true)
+    try {
+      await salvarAjusteFechamento(cartao, mesAtual, null)
+      toast({ title: 'Fechamento voltou ao dia padrão' })
+      await load()
+    } catch {
+      toast({ variant: 'destructive', title: 'Erro ao reverter ajuste' })
+    } finally {
+      setSavingAjuste(false)
+    }
   }
 
   const clicouExcluir = async (t: Transacao) => {
@@ -125,7 +206,7 @@ export const CartoesPage: React.FC = () => {
               Meus Cartões
             </h1>
             <p className="text-xs text-gray-500">
-              Faturas com gastos a partir do vencimento caindo no mês seguinte
+              Faturas com gastos a partir do fechamento caindo no mês seguinte
             </p>
           </div>
           <button
@@ -143,6 +224,7 @@ export const CartoesPage: React.FC = () => {
               <button
                 onClick={() => setShowAdd(false)}
                 className="p-1 rounded-full hover:bg-gray-100"
+                aria-label="Fechar formulário"
               >
                 <X className="w-4 h-4 text-gray-500" />
               </button>
@@ -158,13 +240,13 @@ export const CartoesPage: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="text-xs font-semibold text-gray-600">Dia do vencimento *</label>
+                <label className="text-xs font-semibold text-gray-600">Dia do fechamento *</label>
                 <input
                   type="number"
                   min={1}
                   max={28}
-                  value={diaVenc}
-                  onChange={(e) => setDiaVenc(e.target.value)}
+                  value={diaFech}
+                  onChange={(e) => setDiaFech(e.target.value)}
                   className="w-full mt-1 rounded-xl border border-[#ECE6F2] bg-[#FAF8FC] px-3 py-2.5 text-sm outline-none focus:border-[#6639A6]"
                 />
                 <p className="text-[11px] text-gray-400 mt-1">
@@ -202,6 +284,8 @@ export const CartoesPage: React.FC = () => {
             const faturaAtual = doCartao.filter((t) => mesDaFatura(t, [cartao]) === mesAtual)
             const faturaProxima = doCartao.filter((t) => mesDaFatura(t, [cartao]) === mesProximo)
             const soma = (list: Transacao[]) => list.reduce((acc, t) => acc + t.valor, 0)
+            const ajuste = ajusteFechamentoDoMes(cartao, mesAtual)
+            const editando = editandoId === cartao.id
             return (
               <div key={cartao.id} className="space-y-3">
                 {/* Cartão */}
@@ -215,7 +299,7 @@ export const CartoesPage: React.FC = () => {
                     <div>
                       <p className="text-sm font-black">{cartao.nome}</p>
                       <p className="text-[11px] text-white/80 mt-0.5">
-                        Vencimento: dia {cartao.dia_vencimento}
+                        Fechamento: dia {cartao.dia_vencimento}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -223,10 +307,19 @@ export const CartoesPage: React.FC = () => {
                         onClick={() => void excluirCartao(cartao.id)}
                         className="p-1 text-white/60 hover:text-white transition"
                         title="Excluir cartão"
+                        aria-label={`Excluir cartão ${cartao.nome}`}
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
-                      <CreditCard className="w-6 h-6 text-white/70" />
+                      <button
+                        onClick={() => iniciarEdicaoCartao(cartao)}
+                        className="p-1 text-white/60 hover:text-white transition"
+                        title="Editar cartão"
+                        aria-label={`Editar cartão ${cartao.nome}`}
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                      <CreditCard className="w-6 h-6 text-white/70" aria-hidden="true" />
                     </div>
                   </div>
                   <p className="text-[10px] text-white/70 mt-3 leading-snug">
@@ -234,6 +327,157 @@ export const CartoesPage: React.FC = () => {
                     seguinte.
                   </p>
                 </div>
+
+                {/* Edição do cartão (nome + dia de fechamento) */}
+                {editando && (
+                  <section className="bg-white rounded-3xl p-5 shadow-[0_4px_24px_rgba(102,57,166,0.06)] border border-[#EBE4F5]">
+                    <div className="flex items-center justify-between mb-3">
+                      <h2 className="text-sm font-black text-[#1F1438]">Editar cartão</h2>
+                      <button
+                        onClick={() => setEditandoId(null)}
+                        className="p-1 rounded-full hover:bg-gray-100"
+                        aria-label="Fechar edição"
+                      >
+                        <X className="w-4 h-4 text-gray-500" />
+                      </button>
+                    </div>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-xs font-semibold text-gray-600">
+                          Nome do cartão *
+                        </label>
+                        <input
+                          value={nomeEdicao}
+                          onChange={(e) => setNomeEdicao(e.target.value)}
+                          className="w-full mt-1 rounded-xl border border-[#ECE6F2] bg-[#FAF8FC] px-3 py-2.5 text-sm outline-none focus:border-[#6639A6]"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold text-gray-600">
+                          Dia do fechamento *
+                        </label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={28}
+                          value={diaFechEdicao}
+                          onChange={(e) => setDiaFechEdicao(e.target.value)}
+                          className="w-full mt-1 rounded-xl border border-[#ECE6F2] bg-[#FAF8FC] px-3 py-2.5 text-sm outline-none focus:border-[#6639A6]"
+                        />
+                        <p className="text-[11px] text-gray-400 mt-1">
+                          A partir de agora, compras feitas a partir desse dia caem na fatura do mês
+                          seguinte. Lançamentos já feitos não mudam de fatura — a nova data vale só
+                          para os próximos.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setEditandoId(null)}
+                          className="flex-1 py-3 text-xs font-bold text-[#6639A6] rounded-2xl bg-[#F1EAF9] hover:bg-[#E3D5F5] transition"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void salvarEdicaoCartao()}
+                          disabled={savingEdicao}
+                          className="flex-1 py-3 text-xs font-bold text-white rounded-2xl bg-[#6639A6] hover:bg-[#522c8a] disabled:opacity-60 transition"
+                        >
+                          {savingEdicao ? 'Salvando…' : 'Salvar alterações'}
+                        </button>
+                      </div>
+                    </div>
+                  </section>
+                )}
+
+                {/* Ajuste de fechamento só para o mês atual */}
+                {cartaoAjuste?.id === cartao.id ? (
+                  <section className="bg-white rounded-3xl p-5 shadow-[0_4px_24px_rgba(102,57,166,0.06)] border border-[#EBE4F5]">
+                    <div className="flex items-center justify-between mb-3">
+                      <h2 className="text-sm font-black text-[#1F1438]">
+                        Fechamento deste mês ({rotuloFatura(mesAtual)})
+                      </h2>
+                      <button
+                        onClick={() => setCartaoAjuste(null)}
+                        className="p-1 rounded-full hover:bg-gray-100"
+                        aria-label="Fechar ajuste"
+                      >
+                        <X className="w-4 h-4 text-gray-500" />
+                      </button>
+                    </div>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-xs font-semibold text-gray-600">
+                          Dia do fechamento de {rotuloFatura(mesAtual)}
+                        </label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={28}
+                          value={diaAjuste}
+                          onChange={(e) => setDiaAjuste(e.target.value)}
+                          className="w-full mt-1 rounded-xl border border-[#ECE6F2] bg-[#FAF8FC] px-3 py-2.5 text-sm outline-none focus:border-[#6639A6]"
+                        />
+                        <p className="text-[11px] text-gray-400 mt-1">
+                          Ajuste pontual para {rotuloFatura(mesAtual)}: quando o banco antecipa ou
+                          atrasa o fechamento (fim de semana, feriado). Os meses seguintes voltam ao
+                          dia padrão ({cartao.dia_vencimento}).
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => void reverterAjuste(cartao)}
+                          disabled={savingAjuste}
+                          className="flex items-center justify-center gap-1.5 flex-1 py-3 text-xs font-bold text-[#6639A6] rounded-2xl bg-[#F1EAF9] hover:bg-[#E3D5F5] disabled:opacity-60 transition"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" /> Voltar ao padrão
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void salvarAjuste()}
+                          disabled={savingAjuste}
+                          className="flex-1 py-3 text-xs font-bold text-white rounded-2xl bg-[#6639A6] hover:bg-[#522c8a] disabled:opacity-60 transition"
+                        >
+                          {savingAjuste ? 'Salvando…' : 'Aplicar ajuste'}
+                        </button>
+                      </div>
+                    </div>
+                  </section>
+                ) : (
+                  ajuste && (
+                    <div className="flex items-center justify-between gap-2 bg-white rounded-2xl border border-[#EBE4F5] px-4 py-3">
+                      <p className="text-[11px] text-gray-600 flex items-center gap-1.5 min-w-0">
+                        <CalendarClock className="w-3.5 h-3.5 text-[#6639A6] shrink-0" />
+                        <span className="truncate">
+                          Fechamento de {rotuloFatura(mesAtual)} ajustado para o dia{' '}
+                          {ajuste.getDate()}
+                        </span>
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => void reverterAjuste(cartao)}
+                        disabled={savingAjuste}
+                        className="flex items-center gap-1 text-[11px] font-bold text-[#6639A6] hover:underline shrink-0 disabled:opacity-60"
+                      >
+                        <RotateCcw className="w-3 h-3" /> Reverter
+                      </button>
+                    </div>
+                  )
+                )}
+
+                {/* Botão de abrir o ajuste do mês */}
+                {cartaoAjuste?.id !== cartao.id && (
+                  <button
+                    type="button"
+                    onClick={() => abrirAjuste(cartao)}
+                    className="w-full flex items-center justify-center gap-1.5 text-[11px] font-bold text-[#6639A6] bg-white border border-[#EBE4F5] rounded-2xl py-2.5 hover:bg-[#F6F3FB] transition"
+                  >
+                    <CalendarClock className="w-3.5 h-3.5" />
+                    Ajustar fechamento deste mês
+                  </button>
+                )}
 
                 {/* Fatura atual */}
                 <FaturaCard

@@ -31,7 +31,7 @@ const firstNameOf = (user: { name?: string } | null | undefined): string =>
  * seção de cartões com a fatura do mês e as últimas compras, e o donut de
  * gastos por categoria portado na 0.0.7. Mesmos textos, cores e hierarquia
  * do original, com os dados vindo das coleções PocketBase deste projeto
- * (regra de fatura por vencimento aplicada no transacoesService).
+ * (regra de fatura por fechamento aplicada no transacoesService).
  */
 export const DashboardPage: React.FC = () => {
   const { user } = useAuth()
@@ -126,7 +126,7 @@ export const DashboardPage: React.FC = () => {
     return despesas.filter((t) => (t.categoria_id || 'outros') === catSelecionada.id)
   }, [catSelecionada, despesas])
 
-  // Cartões: fatura do mês (mesma regra de vencimento usada no extrato)
+  // Cartões: fatura do mês (mesma regra de fechamento usada no extrato)
   const cartoesComFatura = useMemo(() => {
     return cartoes.map((cartao) => {
       const doCartao = transacoes.filter((t) => t.tipo === 'despesa' && t.cartao_id === cartao.id)

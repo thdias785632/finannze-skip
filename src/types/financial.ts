@@ -23,8 +23,18 @@ export interface Cartao {
   id: string
   user_id: string
   nome: string
-  /** Dia do mês (1-31) do vencimento da fatura. Compras no dia do vencimento ou depois caem na fatura do mês seguinte. */
+  /**
+   * Dia do mês (1-28) do FECHAMENTO da fatura (na interface, "fechamento").
+   * Compras no dia do fechamento ou depois caem na fatura do mês seguinte.
+   * Nome técnico mantido por compatibilidade com os dados existentes.
+   */
   dia_vencimento: number
+  /**
+   * Ajuste PONTUAL do fechamento, vale só para UM mês: data completa em que
+   * o fechamento daquele mês aconteceu (ex.: banco antecipou por feriado).
+   * Os meses seguintes voltam ao dia padrão `dia_vencimento`.
+   */
+  fechamento_ajustado?: string
   cor?: string
   created: string
   updated: string

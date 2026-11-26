@@ -113,8 +113,8 @@ export const EditarTransacaoPage: React.FC = () => {
 
   const cartaoSelecionado = cartoes.find((c) => c.id === cartaoId)
 
-  // Prévia da fatura após a edição, com a regra do vencimento (mesDaFatura):
-  // gasto no dia do vencimento ou depois cai na fatura do mês seguinte.
+  // Prévia da fatura após a edição, com a regra do fechamento (mesDaFatura):
+  // gasto no dia do fechamento ou depois cai na fatura do mês seguinte.
   const faturaPrevista = transacao
     ? mesDaFatura(
         { ...transacao, data: dataReferencia, cartao_id: cartaoId || undefined },
@@ -463,11 +463,11 @@ export const EditarTransacaoPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Prévia da fatura — regra do vencimento aplicada (só despesas de cartão) */}
+            {/* Prévia da fatura — regra do fechamento aplicada (só despesas de cartão) */}
             {!ehEntrada && faturaPrevista && cartaoSelecionado && (
               <p className="text-[11px] text-gray-500 bg-[#F6F3FB] rounded-xl px-3 py-2">
                 Este lançamento entra na <strong>fatura de {rotuloFatura(faturaPrevista)}</strong>{' '}
-                (vencimento dia {cartaoSelecionado.dia_vencimento}).
+                (fechamento dia {cartaoSelecionado.dia_vencimento}).
               </p>
             )}
 

@@ -516,7 +516,7 @@ export const NewTransactionPage: React.FC = () => {
 
         <p className="text-center text-[10px] text-gray-400 mt-3 flex items-center justify-center gap-1">
           <ArrowLeftRight className="w-3 h-3" />
-          Gastos no cartão a partir do dia do vencimento caem na fatura do mês seguinte.
+          Gastos no cartão a partir do dia do fechamento caem na fatura do mês seguinte.
         </p>
       </main>
 

@@ -2,13 +2,18 @@ import pb from '@/lib/pocketbase/client'
 import type { Transacao, TipoTransacao, Cartao, TransacaoDivisao } from '@/types/financial'
 import { gruposService } from '@/services/grupos'
 
+import { ajusteVigente, mesDe } from '@/services/fechamentoAjuste'
+
 /**
- * Regra da fatura: um lançamento feito no dia do vencimento do cartão ou
+ * Regra da fatura: um lançamento feito no dia do FECHAMENTO do cartão ou
  * depois cai na fatura do mês SEGUINTE. Receitas não têm cartão — usam o mês
  * da própria data.
  *
- * Ex.: cartão com vencimento dia 10 → compra de 10/05 aparece no extrato de
+ * Ex.: cartão com fechamento dia 10 → compra de 10/05 aparece no extrato de
  * junho; compra de 09/05 aparece em maio.
+ *
+ * Se o cartão tem ajuste pontual de fechamento para o mês da COMPRA (campo
+ * `fechamento_ajustado`), esse dia ajustado é que decide a fatura.
  */
 export const mesDaFatura = (
   transacao: Pick<Transacao, 'data' | 'tipo' | 'cartao_id'>,
@@ -19,7 +24,9 @@ export const mesDaFatura = (
   let mes = d.getMonth() // 0-11
   if (transacao.tipo === 'despesa' && transacao.cartao_id) {
     const cartao = cartoes.find((c) => c.id === transacao.cartao_id)
-    if (cartao && d.getDate() >= cartao.dia_vencimento) {
+    const ajuste = cartao ? ajusteVigente(cartao, mesDe(d)) : null
+    const diaFech = ajuste ? ajuste.getDate() : cartao?.dia_vencimento
+    if (cartao && diaFech && d.getDate() >= diaFech) {
       mes += 1
       if (mes > 11) {
         mes = 0
@@ -69,6 +76,7 @@ const mapTransacao = (r: Record<string, any>): Transacao => ({
           user_id: r.expand.cartao_id.user_id,
           nome: r.expand.cartao_id.nome,
           dia_vencimento: Number(r.expand.cartao_id.dia_vencimento),
+          fechamento_ajustado: r.expand.cartao_id.fechamento_ajustado || undefined,
           cor: r.expand.cartao_id.cor,
           created: r.expand.cartao_id.created,
           updated: r.expand.cartao_id.updated,

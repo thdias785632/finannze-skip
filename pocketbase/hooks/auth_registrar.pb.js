@@ -89,7 +89,7 @@ routerAdd('POST', '/backend/v1/auth/registrar', (c) => {
         titulo: 'Cartões — controle de fatura',
         itens: [
           'Toque em "Cartões" na barra inferior e depois em "Adicionar cartão".',
-          'Informe nome, bandeira, dia de fechamento e vencimento.',
+          'Informe nome, bandeira e dia de fechamento.',
           'Ao lançar uma despesa, escolha o cartão e a fatura dele é atualizada sozinha.',
           'Na tela do cartão você vê o total da fatura e cada compra que a compõe.',
         ],
