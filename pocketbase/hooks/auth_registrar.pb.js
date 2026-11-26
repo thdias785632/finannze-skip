@@ -7,7 +7,7 @@
  * (global e tagged 'users') e coleção de diagnóstico vazia, enquanto rotas
  * (routerAdd) funcionam normalmente. Por isso o cadastro inteiro acontece
  * AQUI, inline: valida os campos, cria o usuário na coleção users (plano
- * free) e envia IMEDIATAMENTE o e-mail de boas-vindas — sem depender de
+ * basico) e envia IMEDIATAMENTE o e-mail de boas-vindas — sem depender de
  * NENHUM hook de evento.
  *
  * Corpo esperado (JSON): { nome, email, senha, telefone }
@@ -274,14 +274,14 @@ routerAdd('POST', '/backend/v1/auth/registrar', (c) => {
       /* sem vínculo existente — sigo */
     }
 
-    // ---- cria o usuário (plano free) — o mesmo que o endpoint padrão fazia ----
+    // ---- cria o usuário (plano basico) — o mesmo que o endpoint padrão fazia ----
     const col = $app.findCollectionByNameOrId('users')
     const usuario = new Record(col)
     usuario.setEmail(email)
     usuario.setPassword(senha)
     usuario.set('name', nome)
     usuario.set('telefone', telefone)
-    usuario.set('plan', 'free')
+    usuario.set('plan', 'basico')
     usuario.setVerified(true)
     $app.save(usuario)
     console.log('[registrar] usuário criado:', usuario.id, email)
