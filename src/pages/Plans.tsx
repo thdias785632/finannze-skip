@@ -1,10 +1,31 @@
-import React from 'react'
-import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Check, X, Crown, Users, MessageCircle, Building2, Sparkles } from 'lucide-react'
+import React, { useCallback, useEffect, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import {
+  ArrowLeft,
+  Check,
+  X,
+  Crown,
+  Users,
+  MessageCircle,
+  Building2,
+  Sparkles,
+  CreditCard,
+  Loader2,
+  PartyPopper,
+} from 'lucide-react'
 import { PLANOS } from '@/lib/planos'
+import type { UserPlan } from '@/types/financial'
 import { useAuth } from '@/context/AuthContext'
 import { AppHeader } from '@/components/AppHeader'
 import { BottomNav } from '@/components/BottomNav'
+import { useToast } from '@/hooks/use-toast'
+import {
+  consultarAssinatura,
+  iniciarCheckout,
+  confirmarRetorno,
+  cancelarAssinatura,
+  type EstadoAssinatura,
+} from '@/services/assinatura'
 
 const PLANO_ICONE: Record<string, React.ReactNode> = {
   basico: <Users className="w-4 h-4 text-[#6639A6]" />,
@@ -13,10 +34,121 @@ const PLANO_ICONE: Record<string, React.ReactNode> = {
   ouro: <Building2 className="w-4 h-4 text-[#6639A6]" />,
 }
 
+const ORDEM: UserPlan[] = ['basico', 'bronze', 'prata', 'ouro']
+
+const formatoData = (iso: string | null): string => {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
 export const PlansPage: React.FC = () => {
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { toast } = useToast()
+  const { user, refresh } = useAuth()
+  const [searchParams, setSearchParams] = useSearchParams()
   const planoAtual = user?.plan || 'basico'
+
+  const [assinatura, setAssinatura] = useState<EstadoAssinatura | null>(null)
+  const [carregando, setCarregando] = useState(true)
+  const [planoEmAcao, setPlanoEmAcao] = useState<UserPlan | null>(null)
+
+  const carregar = useCallback(async () => {
+    try {
+      setAssinatura(await consultarAssinatura())
+    } catch {
+      setAssinatura(null)
+    } finally {
+      setCarregando(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    carregar()
+  }, [carregar])
+
+  // Volta do Stripe: ?checkout=ok&session_id=... → ativa o plano.
+  const checkoutOk = searchParams.get('checkout') === 'ok'
+  const sessionId = searchParams.get('session_id')
+  useEffect(() => {
+    if (!checkoutOk || !sessionId) return
+    let ativo = true
+    setPlanoEmAcao('__checkout__' as UserPlan)
+    confirmarRetorno(sessionId)
+      .then(async (plano) => {
+        if (!ativo) return
+        await refresh()
+        setPlanoEmAcao(null)
+        setSearchParams({}, { replace: true })
+        toast({
+          title: 'Assinatura ativada!',
+          description: `Bem-vindo ao plano ${plano.charAt(0).toUpperCase()}${plano.slice(1)}.`,
+        })
+      })
+      .catch((err: Error) => {
+        if (!ativo) return
+        setPlanoEmAcao(null)
+        toast({
+          title: 'Assinatura não confirmada',
+          description:
+            err.message ||
+            'Se o pagamento foi concluído, aguarde alguns minutos — o plano é ativado automaticamente.',
+          variant: 'destructive',
+        })
+      })
+    return () => {
+      ativo = false
+    }
+  }, [checkoutOk, sessionId, refresh, setSearchParams, toast])
+
+  const assinar = async (plano: UserPlan) => {
+    setPlanoEmAcao(plano)
+    try {
+      const url = await iniciarCheckout(plano)
+      window.location.assign(url)
+    } catch (err) {
+      setPlanoEmAcao(null)
+      toast({
+        title: 'Checkout indisponível',
+        description:
+          err instanceof Error
+            ? err.message
+            : 'Não foi possível abrir o checkout. Tente novamente.',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  const cancelar = async () => {
+    if (!confirm('Cancelar a assinatura? O plano continua ativo até o fim do período já pago.')) {
+      return
+    }
+    setPlanoEmAcao(planoAtual)
+    try {
+      const estado = await cancelarAssinatura()
+      setAssinatura(estado)
+      toast({
+        title: 'Cancelamento agendado',
+        description: `O plano vale até ${formatoData(estado.periodoFim) || 'o fim do período pago'}; depois, volta ao Básico.`,
+      })
+    } catch (err) {
+      toast({
+        title: 'Não foi possível cancelar',
+        description: err instanceof Error ? err.message : 'Tente novamente.',
+        variant: 'destructive',
+      })
+    } finally {
+      setPlanoEmAcao(null)
+    }
+  }
+
+  const planoAssinado =
+    assinatura?.ativa && assinatura.plano ? (assinatura.plano as UserPlan) : null
+  const acimaDoAtual = (id: UserPlan) => ORDEM.indexOf(id) > ORDEM.indexOf(planoAtual)
+  const emConfirmacao = checkoutOk && !!sessionId
+  const podeAssinar = (id: UserPlan) =>
+    id !== 'basico' && acimaDoAtual(id) && planoAssinado !== id && !emConfirmacao && !planoEmAcao
 
   return (
     <div className="min-h-screen bg-[#F5F3F7] pb-24">
@@ -37,15 +169,36 @@ export const PlansPage: React.FC = () => {
           Escolha o plano ideal para o seu momento. Cada plano inclui tudo do anterior.
         </p>
 
+        {checkoutOk && !sessionId && (
+          <div className="mb-4 flex items-start gap-2 rounded-2xl bg-amber-50 border border-amber-200 p-4">
+            <Loader2 className="w-4 h-4 text-amber-600 shrink-0 mt-0.5 animate-spin" />
+            <p className="text-xs text-amber-800 leading-relaxed">
+              Pagamento em confirmação — o plano é ativado automaticamente em instantes.
+            </p>
+          </div>
+        )}
+
+        {assinatura?.cancelando && assinatura.ativa && (
+          <div className="mb-4 rounded-2xl bg-amber-50 border border-amber-200 p-4">
+            <p className="text-xs text-amber-800 leading-relaxed">
+              <strong>Cancelamento agendado.</strong> O plano {planoAssinado || planoAtual} vale até{' '}
+              {formatoData(assinatura.periodoFim) || 'o fim do período pago'}; depois, a conta volta
+              para o Básico.
+            </p>
+          </div>
+        )}
+
         <div className="space-y-4">
           {PLANOS.map((plano) => {
             const atual = plano.id === planoAtual
+            const assinado = planoAssinado === plano.id
+            const emAcao = planoEmAcao === plano.id || emConfirmacao
             return (
               <div
                 key={plano.id}
                 className={`rounded-3xl border p-5 ${plano.color} relative overflow-hidden`}
               >
-                {plano.popular && (
+                {plano.popular && !assinado && (
                   <span className="absolute top-0 right-0 rounded-bl-2xl bg-[#6639A6] px-3 py-1 text-[10px] font-bold text-white">
                     Mais popular
                   </span>
@@ -53,6 +206,11 @@ export const PlansPage: React.FC = () => {
                 {atual && (
                   <span className="absolute top-0 right-0 rounded-bl-2xl bg-emerald-600 px-3 py-1 text-[10px] font-bold text-white">
                     Seu plano
+                  </span>
+                )}
+                {assinado && !atual && (
+                  <span className="absolute top-0 right-0 rounded-bl-2xl bg-sky-600 px-3 py-1 text-[10px] font-bold text-white">
+                    Assinado
                   </span>
                 )}
 
@@ -87,6 +245,62 @@ export const PlansPage: React.FC = () => {
                     </li>
                   ))}
                 </ul>
+
+                {atual && plano.id !== 'basico' && assinado && (
+                  <div className="mt-4 flex items-start gap-2 rounded-xl bg-white/70 p-3">
+                    <PartyPopper className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <div className="text-xs leading-relaxed text-[#1F1438]">
+                      <p className="font-semibold">
+                        Assinatura ativa
+                        {assinatura?.cancelando ? ' — cancelamento agendado' : ''}
+                      </p>
+                      {assinatura?.periodoFim && (
+                        <p className="text-gray-500">
+                          Próxima renovação: {formatoData(assinatura.periodoFim)}
+                        </p>
+                      )}
+                      {!assinatura?.cancelando && (
+                        <button
+                          type="button"
+                          onClick={cancelar}
+                          disabled={emAcao}
+                          className="mt-1 text-[11px] font-semibold text-red-600 hover:underline disabled:opacity-50"
+                        >
+                          {emAcao ? 'Cancelando…' : 'Cancelar assinatura'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {atual && plano.id !== 'basico' && !assinado && (
+                  <div className="mt-4 rounded-xl bg-white/70 p-3">
+                    <p className="text-xs font-semibold text-[#1F1438]">Plano ativo</p>
+                    <p className="text-[11px] text-gray-500 leading-relaxed mt-0.5">
+                      Ativado manualmente pelo administrador. Para assinar com cobrança automática,
+                      entre em contato pelo menu Contato.
+                    </p>
+                  </div>
+                )}
+
+                {podeAssinar(plano.id) && (
+                  <button
+                    type="button"
+                    onClick={() => assinar(plano.id)}
+                    disabled={!!planoEmAcao}
+                    className="mt-4 w-full flex items-center justify-center gap-2 rounded-xl bg-[#6639A6] py-2.5 text-sm font-bold text-white hover:bg-[#55298a] disabled:opacity-60"
+                  >
+                    {emAcao ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" /> Abrindo checkout…
+                      </>
+                    ) : (
+                      <>
+                        <CreditCard className="w-4 h-4" /> Assinar {plano.name}
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
             )
           })}
@@ -95,9 +309,8 @@ export const PlansPage: React.FC = () => {
         <div className="mt-6 flex items-start gap-2 rounded-2xl bg-[#F1EAF9] p-4">
           <Crown className="w-4 h-4 text-[#6639A6] shrink-0 mt-0.5" />
           <p className="text-xs text-[#4A247A] leading-relaxed">
-            Para alterar o plano de um usuário para <strong>Bronze</strong>, <strong>Prata</strong>{' '}
-            ou <strong>Ouro</strong>, fale com o administrador pelo menu Contato. A ativação é
-            manual — sem cobrança automática no app.
+            Assine com cartão de crédito pelo checkout seguro do Stripe, em cobrança mensal. Para
+            alterar um plano à mão, fale com o administrador pelo menu Contato.
           </p>
         </div>
       </div>
