@@ -50,7 +50,9 @@ export const PerfilMenu: React.FC = () => {
 
   const sair = async () => {
     await logout()
-    navigate('/login', { replace: true })
+    // A tela de login é a própria rota "/" (Index renderiza AuthScreen sem sessão);
+    // "/login" não existe no roteador e caía na página 404.
+    navigate('/', { replace: true })
   }
 
   return (
