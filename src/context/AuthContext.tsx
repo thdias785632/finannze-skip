@@ -52,26 +52,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const canAccessFutureExtract = planoAbaixoDe(plan, 'bronze') === false
   const canAccessImoveis = plan === 'ouro'
 
+  // Não alteram o `loading` global: ele esconde a tela de autenticação (Index/ProtectedRoute)
+  // e desmontaria o formulário, perdendo o que foi digitado e a mensagem de erro.
   const login = async (email: string, pass: string) => {
-    setLoading(true)
-    try {
-      const logged = await authService.login(email, pass)
-      setUser(logged)
-      return logged
-    } finally {
-      setLoading(false)
-    }
+    const logged = await authService.login(email, pass)
+    setUser(logged)
+    return logged
   }
 
   const signup = async (name: string, email: string, pass: string, telefone: string) => {
-    setLoading(true)
-    try {
-      const created = await authService.signup(name, email, pass, telefone)
-      setUser(created)
-      return created
-    } finally {
-      setLoading(false)
-    }
+    const created = await authService.signup(name, email, pass, telefone)
+    setUser(created)
+    return created
   }
 
   const logout = () => {

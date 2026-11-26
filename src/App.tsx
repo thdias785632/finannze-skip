@@ -16,12 +16,14 @@ import { EditarTransacaoPage } from '@/pages/EditarTransacao'
 import { BoasVindas, consumirBoasVindasPendentes } from '@/pages/BoasVindas'
 import { TutorialPage } from '@/pages/Tutorial'
 import NotFound from '@/pages/NotFound'
+import { Toaster } from '@/components/ui/toaster'
 
 const App: React.FC = () => {
   return (
     <BrowserRouter>
       <AuthProvider>
         <ScrollToTop />
+        <Toaster />
         <Routes>
           <Route path="/" element={<Index />} />
           <Route element={<ProtectedRoute />}>

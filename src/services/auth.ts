@@ -24,7 +24,20 @@ export const authService = {
   },
 
   async login(email: string, pass: string): Promise<User> {
-    const authData = await pb.collection('users').authWithPassword(email, pass)
+    let authData
+    try {
+      authData = await pb.collection('users').authWithPassword(email, pass)
+    } catch (err: unknown) {
+      // PocketBase devolve erro em inglês ("Failed to authenticate.") — traduz para o usuário.
+      const status = (err as { status?: number } | null)?.status
+      if (status === 400 || status === 401 || status === 403) {
+        throw new Error('E-mail ou senha incorretos.')
+      }
+      if (status === undefined || status === 0 || err instanceof TypeError) {
+        throw new Error('Sem conexão com o servidor. Verifique sua internet e tente novamente.')
+      }
+      throw new Error('Falha ao entrar. Tente novamente.')
+    }
     const rec = authData.record
     return {
       id: rec.id,
@@ -44,14 +57,19 @@ export const authService = {
     // o e-mail de boas-vindas INLINE — nesta instância Skip Cloud callbacks
     // onRecordAfterCreateSuccess não executam (bug comprovado), então nada
     // aqui depende de hook de evento.
-    const resp = await fetch(
-      `${import.meta.env.VITE_POCKETBASE_URL.replace(/\/$/, '')}/backend/v1/auth/registrar`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nome: name, email, senha: pass, telefone }),
-      },
-    )
+    let resp: Response
+    try {
+      resp = await fetch(
+        `${import.meta.env.VITE_POCKETBASE_URL.replace(/\/$/, '')}/backend/v1/auth/registrar`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nome: name, email, senha: pass, telefone }),
+        },
+      )
+    } catch {
+      throw new Error('Sem conexão com o servidor. Verifique sua internet e tente novamente.')
+    }
 
     let corpo: { user?: { id?: string; plan?: string }; error?: string } = {}
     try {
