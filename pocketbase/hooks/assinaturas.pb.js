@@ -23,7 +23,10 @@
 
 routerAdd('GET', '/backend/v1/assinatura', (c) => {
   try {
-    const auth = c.auth()
+    // JSVM: `auth` pode vir como MÉTODO ou como PROPRIEDADE do evento — chamar
+    // como função quando é propriedade lança "Not a function: [object Object]"
+    // e derruba a rota inteira. Forma defensiva que funciona nos dois bindings.
+    const auth = typeof c.auth === 'function' ? c.auth() : c.auth
     if (!auth || !auth.id) return c.json(401, { error: 'Não autenticado' })
     const rec = $app.findRecordById('users', auth.id)
     const status = rec.getString('stripe_status') || ''
@@ -35,11 +38,20 @@ routerAdd('GET', '/backend/v1/assinatura', (c) => {
       cancelando: status === 'canceling' || rec.getBool('stripe_cancelar'),
       plano: plano,
       status: status,
-      periodoFim: fim && !fim.isZero() ? fim.string() : null,
+      periodoFim:
+        fim && typeof fim.string === 'function'
+          ? fim.isZero && typeof fim.isZero === 'function' && fim.isZero()
+            ? null
+            : fim.string()
+          : null,
       subscriptionId: sub,
     })
   } catch (err) {
-    console.error('[assinaturas] erro no estado:', (err && err.message) || err)
+    console.error(
+      '[assinaturas] erro no estado:',
+      (err && err.message) || err,
+      (err && err.stack) || '',
+    )
     return c.json(500, { error: 'Falha ao consultar assinatura' })
   }
 })
@@ -247,7 +259,7 @@ routerAdd('POST', '/backend/v1/assinatura/checkout', (c) => {
       return novo.id
     }
 
-    const auth = c.auth()
+    const auth = typeof c.auth === 'function' ? c.auth() : c.auth
     if (!auth || !auth.id) return c.json(401, { error: 'Não autenticado' })
 
     const info = c.requestInfo()
@@ -258,7 +270,7 @@ routerAdd('POST', '/backend/v1/assinatura/checkout', (c) => {
     const base = String(origem || '').replace(/\/$/, '')
     if (!base) return c.json(400, { error: 'Origem não informada' })
 
-    const email = auth.email()
+    const email = typeof auth.email === 'function' ? auth.email() : auth.email
     if (!email) return c.json(400, { error: 'Usuário sem e-mail' })
 
     const priceId = precoDoPlano(plano)
@@ -280,7 +292,11 @@ routerAdd('POST', '/backend/v1/assinatura/checkout', (c) => {
     console.log('[assinaturas] checkout criado: usuário ' + auth.id + ' plano ' + plano)
     return c.json(200, { url: sessao.url, sessionId: sessao.id })
   } catch (err) {
-    console.error('[assinaturas] erro no checkout:', (err && err.message) || err)
+    console.error(
+      '[assinaturas] erro no checkout:',
+      (err && err.message) || err,
+      (err && err.stack) || '',
+    )
     return c.json(502, { error: (err && err.message) || 'Falha ao iniciar checkout' })
   }
 })
@@ -325,7 +341,7 @@ routerAdd('GET', '/backend/v1/assinatura/retorno', (c) => {
       )
     }
 
-    const auth = c.auth()
+    const auth = typeof c.auth === 'function' ? c.auth() : c.auth
     if (!auth || !auth.id) return c.json(401, { error: 'Não autenticado' })
     const info = c.requestInfo()
     const sessionId = (info.query && info.query.session_id) || ''
@@ -379,14 +395,18 @@ routerAdd('GET', '/backend/v1/assinatura/retorno', (c) => {
     })
     return c.json(200, { ativado: true, plano: plano })
   } catch (err) {
-    console.error('[assinaturas] erro no retorno:', (err && err.message) || err)
+    console.error(
+      '[assinaturas] erro no retorno:',
+      (err && err.message) || err,
+      (err && err.stack) || '',
+    )
     return c.json(502, { error: (err && err.message) || 'Falha ao ativar assinatura' })
   }
 })
 
 routerAdd('POST', '/backend/v1/assinatura/cancelar', (c) => {
   try {
-    const auth = c.auth()
+    const auth = typeof c.auth === 'function' ? c.auth() : c.auth
     if (!auth || !auth.id) return c.json(401, { error: 'Não autenticado' })
     const rec = $app.findRecordById('users', auth.id)
     const status = rec.getString('stripe_status') || ''
@@ -419,11 +439,20 @@ routerAdd('POST', '/backend/v1/assinatura/cancelar', (c) => {
       cancelando: true,
       plano: rec.getString('stripe_plano') || '',
       status: 'canceling',
-      periodoFim: fim && !fim.isZero() ? fim.string() : null,
+      periodoFim:
+        fim && typeof fim.string === 'function'
+          ? fim.isZero && typeof fim.isZero === 'function' && fim.isZero()
+            ? null
+            : fim.string()
+          : null,
       subscriptionId: sub,
     })
   } catch (err) {
-    console.error('[assinaturas] erro ao cancelar:', (err && err.message) || err)
+    console.error(
+      '[assinaturas] erro ao cancelar:',
+      (err && err.message) || err,
+      (err && err.stack) || '',
+    )
     return c.json(502, { error: (err && err.message) || 'Falha ao cancelar assinatura' })
   }
 })
