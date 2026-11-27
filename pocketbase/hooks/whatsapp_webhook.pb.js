@@ -39,7 +39,7 @@
  */
 
 console.log(
-  '[whatsapp_webhook] arquivo carregado — build v6 (agente IA sempre: item limpo + categoria)',
+  '[whatsapp_webhook] arquivo carregado — build v7 (descrição capitalizada: primeira letra maiúscula)',
 )
 
 routerAdd('GET', '/backend/v1/whatsapp/webhook', (c) => {
@@ -374,6 +374,16 @@ routerAdd('POST', '/backend/v1/whatsapp/webhook', (c) => {
     return /assinatura|assinou|plano/.test(t)
   }
 
+  /**
+   * Capitaliza a descrição: primeira letra em maiúscula, resto INTACTO
+   * ("camiseta da Hering" → "Camiseta da Hering"; "iFood" continua "iFood").
+   */
+  function capitalizar(s) {
+    const d = String(s || '')
+    if (!d) return d
+    return d.charAt(0).toUpperCase() + d.slice(1)
+  }
+
   /** Descrição = texto sem o valor, sem "R$", sem "em Nx" etc., enxugado. */
   function descrever(texto) {
     let d = String(texto || '').trim()
@@ -382,7 +392,7 @@ routerAdd('POST', '/backend/v1/whatsapp/webhook', (c) => {
     d = d.replace(/\b(em|de|no|na|pelo|pela|do|da|todo|toda|mes|m[eê]s|x|vezes|parcelas?)\b/gi, ' ')
     d = d.replace(/\s{2,}/g, ' ').trim()
     if (!d) d = 'Movimento via WhatsApp'
-    return d.substring(0, 120)
+    return capitalizar(d.substring(0, 120))
   }
 
   /**
@@ -526,7 +536,7 @@ routerAdd('POST', '/backend/v1/whatsapp/webhook', (c) => {
 
     // Sucesso: descrição LIMPA (só o item) e categoria escolhida pela IA,
     // revalidada contra o banco (nome exato da coleção categorias).
-    msg.descricaoFinal = intento.descricao_essencial || descrever(texto)
+    msg.descricaoFinal = capitalizar(intento.descricao_essencial || descrever(texto))
     msg.categoriaId = intento.categoria_nome
       ? categoriaPorNome(catRecords, intento.categoria_nome)
       : null
@@ -612,7 +622,9 @@ routerAdd('POST', '/backend/v1/whatsapp/webhook', (c) => {
     const hoje = new Date().toISOString().replace('T', ' ').substring(0, 19) + 'Z'
     const transacao = new Record($app.findCollectionByNameOrId('transacoes'))
     transacao.set('user_id', usuario.id)
-    transacao.set('descricao', descricaoOverride || descrever(texto))
+    // Descrição sempre capitalizada (agente E fallback regex já chegam limpos,
+    // mas reforço aqui para cobrir pendências gravadas antes do ajuste).
+    transacao.set('descricao', capitalizar(descricaoOverride || descrever(texto)))
     transacao.set('valor', intento.parcelas > 1 ? intento.valor / intento.parcelas : intento.valor)
     transacao.set('tipo', intento.tipo)
     transacao.set('data', hoje)
