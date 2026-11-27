@@ -67,12 +67,20 @@ function TituloDasRotas() {
  * Rota acessível SÓ por usuários admin (e sem o modo "ver como cliente").
  * Usa o ProtectedRoute como layout route (Outlet): a checagem de login fica
  * nele, aqui só checo o is_admin. Não-admin cai no 404 (não expõe que existe).
+ * Admin que liga o "ver como cliente" DENTRO do painel é levado ao dashboard
+ * do cliente (não ao 404 — era o bug do toggle).
  */
 function AdminRoute() {
   const { user } = useAuth()
   const { verComoCliente } = useVerComoCliente()
 
-  if (!user || verComoCliente || !user.is_admin) {
+  if (!user) {
+    return <NotFound />
+  }
+  if (verComoCliente) {
+    return <Navigate to="/dashboard" replace />
+  }
+  if (!user.is_admin) {
     return <NotFound />
   }
   return <Outlet />
