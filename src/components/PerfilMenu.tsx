@@ -1,6 +1,14 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bot, HelpCircle, LogOut, Pencil, UserRoundCheck, LifeBuoy } from 'lucide-react'
+import {
+  Bot,
+  HelpCircle,
+  LayoutDashboard,
+  LogOut,
+  Pencil,
+  UserRoundCheck,
+  LifeBuoy,
+} from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -74,8 +82,14 @@ export function PerfilMenu() {
           </DropdownMenuItem>
 
           {isAdmin && !verComoCliente && (
-            <DropdownMenuItem onSelect={() => navigate('/atendimentos')}>
+            <DropdownMenuItem onSelect={() => navigate('/admin/atendimentos')}>
               <Bot className="mr-2 h-4 w-4" /> Atendimentos
+            </DropdownMenuItem>
+          )}
+
+          {isAdmin && !verComoCliente && (
+            <DropdownMenuItem onSelect={() => navigate('/admin')}>
+              <LayoutDashboard className="mr-2 h-4 w-4" /> Painel admin
             </DropdownMenuItem>
           )}
 

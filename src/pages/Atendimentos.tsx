@@ -106,10 +106,10 @@ export const AtendimentosPage: React.FC = () => {
           </p>
           <button
             type="button"
-            onClick={() => navigate('/dashboard')}
+            onClick={() => navigate('/admin')}
             className="mt-4 rounded-full bg-[#6639A6] px-5 py-2 text-sm font-semibold text-white focus-visible:ring-2 focus-visible:ring-[#6639A6] focus-visible:ring-offset-2"
           >
-            Ir para o Resumo
+            Ir para o painel admin
           </button>
         </div>
         <BottomNav />
