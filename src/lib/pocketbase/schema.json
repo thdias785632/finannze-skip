@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-27T12:23:33.639Z",
+  "generatedAt": "2026-11-27T12:38:45.466Z",
   "collections": [
     {
       "name": "users",
@@ -1103,7 +1103,7 @@
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": ["aberto", "em_atendimento", "resolvido"]
+          "selectValues": ["aberto", "em_atendimento", "resolvido", "respondido"]
         },
         {
           "name": "origem",
@@ -1121,6 +1121,39 @@
         {
           "name": "resumo",
           "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "canal",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["app", "whatsapp"]
+        },
+        {
+          "name": "motivo_escalonamento",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "respondido_em",
+          "type": "date",
           "required": false,
           "system": false
         }
@@ -1160,9 +1193,71 @@
           "type": "text",
           "required": true,
           "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
         }
       ],
       "indexes": ["CREATE INDEX idx_atendmsg_atendimento ON atendimentos_mensagens (atendimento)"]
+    },
+    {
+      "name": "ajuda_conversas",
+      "type": "base",
+      "apiRules": {
+        "list": null,
+        "view": null,
+        "create": null,
+        "update": null,
+        "delete": null
+      },
+      "fields": [
+        {
+          "name": "user_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "papel",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["cliente", "agente"]
+        },
+        {
+          "name": "texto",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": ["CREATE INDEX idx_ajudaconv_user ON ajuda_conversas (user_id)"]
     }
   ]
 }

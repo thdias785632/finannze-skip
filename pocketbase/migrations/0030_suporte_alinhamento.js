@@ -41,8 +41,8 @@ migrate(
           col.fields.add(
             new AutodateField({
               name: campo,
-              onCreated: campo === 'created',
-              onUpdated: campo === 'updated',
+              onCreate: true,
+              onUpdate: campo === 'updated',
             }),
           )
           mudou = true
@@ -132,6 +132,16 @@ migrate(
         ],
         indexes: ['CREATE INDEX idx_ajudaconv_user ON ajuda_conversas (user_id)'],
       })
+      // Base coleções exigem created/updated explícitos (senão sort/filter
+      // falha com invalid sort field "created", igual às outras coleções).
+      const fCreated = conversa.fields.getByName('created')
+      if (!fCreated) {
+        conversa.fields.add(new AutodateField({ name: 'created', onCreate: true, onUpdate: false }))
+      }
+      const fUpdated = conversa.fields.getByName('updated')
+      if (!fUpdated) {
+        conversa.fields.add(new AutodateField({ name: 'updated', onCreate: true, onUpdate: true }))
+      }
       app.save(conversa)
       console.log('0030: coleção ajuda_conversas criada')
     }

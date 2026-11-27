@@ -175,7 +175,7 @@ export const BoasVindas: React.FC = () => {
 
         <button
           type="button"
-          onClick={() => navigate('/resumo')}
+          onClick={() => navigate('/dashboard')}
           className="mt-6 w-full rounded-2xl bg-[#6639A6] py-3 text-sm font-bold text-white hover:bg-[#522c8a] transition"
         >
           Começar a usar o Quitafy
