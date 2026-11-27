@@ -116,6 +116,9 @@ function App() {
               <Route element={<ClienteRoute />}>
                 <Route path="/dashboard" element={<DashboardPage />} />
                 <Route path="/nova-transacao" element={<NewTransactionPage />} />
+                {/* /editar-transacao/:id é o caminho usado pelos links de edição
+                    (Extrato/Cartões); /transacao/:id fica por compatibilidade. */}
+                <Route path="/editar-transacao/:id" element={<EditarTransacaoPage />} />
                 <Route path="/transacao/:id" element={<EditarTransacaoPage />} />
                 <Route path="/extrato" element={<ExtractPage />} />
                 <Route path="/grupos" element={<GruposPage />} />

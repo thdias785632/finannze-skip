@@ -5,16 +5,24 @@
  *   POST /backend/v1/ajuda
  *     Cliente logado envia uma dúvida → grava em ajuda_conversas → chama o
  *     agente nativo 'quitafy-suporte' → grava a resposta e a devolve. Quando o
- *     agente responde com ESCALONAR (JSON {escalonar:true,motivo}), cria um
- *     registro em atendimentos (+ primeira mensagem) e avisa o dono.
+ *     agente responde com JSON de escalonamento ({escalar:true,resumo,resposta}),
+ *     cria um registro em atendimentos (+ primeira mensagem) e avisa o dono.
  *   GET  /backend/v1/ajuda/historico
  *     Histórico da conversa de ajuda do usuário logado (ajuda_conversas).
  *   GET  /backend/v1/atendimentos
- *     Lista de atendimentos abertos — SÓ usuários com is_admin=true.
+ *     Lista de atendimentos — SÓ usuários com is_admin=true.
+ *   GET  /backend/v1/atendimentos/{id}
+ *     Detalhe de um atendimento com as mensagens — só admin.
  *   POST /backend/v1/atendimentos/responder
  *     Admin responde um atendimento: grava a mensagem, marca o atendimento
  *     como respondido e envia a resposta pelo WhatsApp da conta do app para o
  *     número do cliente (janela de 24h da Meta).
+ *
+ * Campos reais (migração 0027): atendimentos = {usuario, status(aberto|
+ * em_atendimento|resolvido|respondido), origem(app|whatsapp), canal, assunto,
+ * resumo, motivo_escalonamento, respondido_em}; atendimentos_mensagens =
+ * {atendimento, autor(cliente|admin|agente), texto}; ajuda_conversas =
+ * {user_id, papel, texto}.
  *
  * Número do dono (admin) para notificações: secret/constante
  * WHATSAPP_DONO_NUMERO (default 5511993216607). Se o envio no WhatsApp falhar,
@@ -82,10 +90,8 @@ routerAdd('POST', '/backend/v1/ajuda', (c) => {
     }
   }
 
-  /**
-   * Envia mensagem de WhatsApp pela conta do app (best-effort). Devolve true
-   * quando a Graph API aceitou (2xx).
-   */
+  /** Envia mensagem de WhatsApp pela conta do app (best-effort). Devolve true
+   * quando a Graph API aceitou (2xx). */
   function enviarWhatsApp(numero, texto) {
     const token = (function lerSecret(nome) {
       try {
@@ -165,20 +171,21 @@ routerAdd('POST', '/backend/v1/ajuda', (c) => {
   }
 
   /** Cria o atendimento + primeira mensagem e notifica o dono. */
-  function abrirAtendimento(usuario, pergunta, motivo) {
+  function abrirAtendimento(usuario, pergunta, motivo, origem) {
     let atendimento = null
     try {
       atendimento = new Record($app.findCollectionByNameOrId('atendimentos'))
-      atendimento.set('user_id', usuario.id)
+      atendimento.set('usuario', usuario.id)
       atendimento.set('status', 'aberto')
-      atendimento.set('canal', 'whatsapp')
+      atendimento.set('origem', origem || 'whatsapp')
+      atendimento.set('canal', origem || 'whatsapp')
       atendimento.set('assunto', String(pergunta || '').substring(0, 200))
+      atendimento.set('resumo', String(motivo || '').substring(0, 2000))
       atendimento.set('motivo_escalonamento', String(motivo || '').substring(0, 500))
       $app.save(atendimento)
       const msg = new Record($app.findCollectionByNameOrId('atendimentos_mensagens'))
-      msg.set('atendimento_id', atendimento.id)
-      msg.set('autor_id', usuario.id)
-      msg.set('autor_papel', 'cliente')
+      msg.set('atendimento', atendimento.id)
+      msg.set('autor', 'cliente')
       msg.set('texto', String(pergunta || '').substring(0, 4000))
       $app.save(msg)
       console.log('[suporte] atendimento aberto:', atendimento.id)
@@ -254,11 +261,12 @@ routerAdd('POST', '/backend/v1/ajuda', (c) => {
         '⚠️ Não consegui responder agora. Vou registrar sua dúvida para o time te responder ' +
         'por aqui mesmo — pode deixar que alguém entra em contato.'
       gravarConversa(userId, 'agente', resposta)
-      abrirAtendimento(usuario, texto, 'O agente de IA não conseguiu responder')
+      abrirAtendimento(usuario, texto, 'O agente de IA não conseguiu responder', 'app')
       return c.json(200, { resposta: resposta, escalonado: true })
     }
 
-    // Escalonamento: o agente pode responder com JSON {escalonar:true,motivo}.
+    // Escalonamento: o agente responde com JSON {escalar:true, resumo, resposta}
+    // (chaves legadas escalonar/escalar/escalate são aceitas também).
     let escalonar = false
     let motivo = ''
     try {
@@ -266,10 +274,13 @@ routerAdd('POST', '/backend/v1/ajuda', (c) => {
       const fim = resposta.lastIndexOf('}')
       if (ini !== -1 && fim > ini) {
         const parsed = JSON.parse(resposta.substring(ini, fim + 1))
-        if (parsed && (parsed.escalonar === true || parsed.escalate === true)) {
+        const querEscalar =
+          parsed &&
+          (parsed.escalar === true || parsed.escalonar === true || parsed.escalate === true)
+        if (querEscalar) {
           escalonar = true
-          motivo = String(parsed.motivo || parsed.reason || '')
-          resposta = String(parsed.mensagem_ao_cliente || '') || resposta
+          motivo = String(parsed.resumo || parsed.motivo || parsed.reason || '')
+          resposta = String(parsed.resposta || parsed.mensagem_ao_cliente || '') || resposta
         }
       }
     } catch (_) {
@@ -279,7 +290,7 @@ routerAdd('POST', '/backend/v1/ajuda', (c) => {
     gravarConversa(userId, 'agente', resposta)
 
     if (escalonar) {
-      abrirAtendimento(usuario, texto, motivo)
+      abrirAtendimento(usuario, texto, motivo, 'app')
     }
 
     return c.json(200, { resposta: resposta, escalonado: escalonar })
@@ -329,7 +340,7 @@ routerAdd('GET', '/backend/v1/atendimentos', (c) => {
     const lista = $app.findRecordsByFilter('atendimentos', 'id != ""', '-created', 100, 0)
     const itens = []
     for (const at of lista) {
-      const clienteId = at.getString('user_id')
+      const clienteId = at.getString('usuario')
       let nomeCliente = ''
       let numeroCliente = ''
       try {
@@ -348,7 +359,7 @@ routerAdd('GET', '/backend/v1/atendimentos', (c) => {
       try {
         const msgs = $app.findRecordsByFilter(
           'atendimentos_mensagens',
-          `atendimento_id = '${at.id}'`,
+          `atendimento = '${at.id}'`,
           'created',
           50,
           0,
@@ -359,8 +370,10 @@ routerAdd('GET', '/backend/v1/atendimentos', (c) => {
       itens.push({
         id: at.id,
         status: at.getString('status'),
+        origem: at.getString('origem'),
         canal: at.getString('canal'),
         assunto: at.getString('assunto'),
+        resumo: at.getString('resumo'),
         motivo_escalonamento: at.getString('motivo_escalonamento'),
         cliente: nomeCliente,
         cliente_id: clienteId,
@@ -395,7 +408,7 @@ routerAdd('GET', '/backend/v1/atendimentos/{id}', (c) => {
     if (!id) return c.json(400, { error: 'Atendimento não informado' })
 
     const at = $app.findRecordById('atendimentos', id)
-    const clienteId = at.getString('user_id')
+    const clienteId = at.getString('usuario')
     let nomeCliente = ''
     let numeroCliente = ''
     try {
@@ -411,7 +424,7 @@ routerAdd('GET', '/backend/v1/atendimentos/{id}', (c) => {
     }
     const msgs = $app.findRecordsByFilter(
       'atendimentos_mensagens',
-      `atendimento_id = '${id}'`,
+      `atendimento = '${id}'`,
       'created',
       100,
       0,
@@ -419,7 +432,9 @@ routerAdd('GET', '/backend/v1/atendimentos/{id}', (c) => {
     return c.json(200, {
       id: at.id,
       status: at.getString('status'),
+      origem: at.getString('origem'),
       assunto: at.getString('assunto'),
+      resumo: at.getString('resumo'),
       motivo_escalonamento: at.getString('motivo_escalonamento'),
       cliente: nomeCliente,
       cliente_id: clienteId,
@@ -428,8 +443,8 @@ routerAdd('GET', '/backend/v1/atendimentos/{id}', (c) => {
       mensagens: msgs.map(function (r) {
         return {
           id: r.id,
-          autor_papel: r.getString('autor_papel'),
-          autor_id: r.getString('autor_id'),
+          autor_papel: r.getString('autor'),
+          autor_id: r.id,
           texto: r.getString('texto'),
           created: r.getString('created'),
         }
@@ -520,7 +535,7 @@ routerAdd('POST', '/backend/v1/atendimentos/responder', (c) => {
     const at = $app.findRecordById('atendimentos', id)
 
     // Número do cliente: telefone do cadastro (DDI) → whatsapp_contas.
-    const clienteId = at.getString('user_id')
+    const clienteId = at.getString('usuario')
     let numeroCliente = ''
     try {
       const cli = $app.findRecordById('users', clienteId)
@@ -545,9 +560,8 @@ routerAdd('POST', '/backend/v1/atendimentos/responder', (c) => {
 
     // Grava a mensagem do admin (independente do envio — o histórico fica).
     const msg = new Record($app.findCollectionByNameOrId('atendimentos_mensagens'))
-    msg.set('atendimento_id', at.id)
-    msg.set('autor_id', usuario.id)
-    msg.set('autor_papel', 'admin')
+    msg.set('atendimento', at.id)
+    msg.set('autor', 'admin')
     msg.set('texto', texto.substring(0, 4000))
     $app.save(msg)
 
