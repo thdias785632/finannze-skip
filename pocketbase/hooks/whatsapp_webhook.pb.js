@@ -38,7 +38,9 @@
  * secrets aparece duplicado (IIFE) dentro de cada callback pelo mesmo motivo.
  */
 
-console.log('[whatsapp_webhook] arquivo carregado — build v5 (agente IA + fallback regex)')
+console.log(
+  '[whatsapp_webhook] arquivo carregado — build v6 (agente IA sempre: item limpo + categoria)',
+)
 
 routerAdd('GET', '/backend/v1/whatsapp/webhook', (c) => {
   console.log('[whatsapp_webhook] GET handler v4 em execução')
@@ -186,33 +188,39 @@ routerAdd('POST', '/backend/v1/whatsapp/webhook', (c) => {
     return null
   }
 
-  /** Procura categoria do usuário cujo nome apareça no texto (match simples). */
-  function categoriaPorTexto(userId, tipo, texto) {
-    const termo = semAcento(String(texto || '').toLowerCase())
-    if (!termo) return null
-    let candidatas = []
+  /**
+   * Categorias do usuário (próprias + padrões de user_id vazio) do tipo dado.
+   * Igual à regra da coleção (0020): "user_id = '' || user_id = userId".
+   */
+  function listarCategorias(userId, tipo) {
     try {
-      candidatas = $app.findRecordsByFilter(
+      return $app.findRecordsByFilter(
         'categorias',
-        `user_id = '${userId}' && (tipo = '${tipo}' || tipo = 'ambos')`,
+        `(user_id = '${userId}' || user_id = '') && (tipo = '${tipo}' || tipo = 'ambos')`,
         'created',
         100,
         0,
       )
     } catch (_) {
-      return null
+      return []
     }
-    // Nome mais longo primeiro: "Supermercado" vence "Mercado" quando ambos batem.
-    candidatas.sort(function (a, b) {
-      return b.getString('nome').length - a.getString('nome').length
-    })
-    for (const cat of candidatas) {
+  }
+
+  /** Categoria do usuário pelo NOME exato (sem acento/caixa) na lista carregada. */
+  function categoriaPorNome(catRecords, nomeAlvo) {
+    const alvo = semAcento(
+      String(nomeAlvo || '')
+        .toLowerCase()
+        .trim(),
+    )
+    if (!alvo) return null
+    for (const cat of catRecords) {
       const nome = semAcento(
         String(cat.getString('nome') || '')
           .toLowerCase()
           .trim(),
       )
-      if (nome.length >= 3 && termo.indexOf(nome) !== -1) return cat
+      if (nome === alvo) return cat
     }
     return null
   }
@@ -379,19 +387,23 @@ routerAdd('POST', '/backend/v1/whatsapp/webhook', (c) => {
 
   /**
    * Chama o agente nativo Skip Cloud ('whatsapp-lancamentos') e devolve a
-   * intenção normalizada {valor, tipo, descricao_essencial, cartao_nome,
-   * parcelas, recorrente} ou {erro} quando não é um lançamento. A lista de
-   * cartões vai no prompt (chave "cartoes_disponiveis") para o agente casar
-   * o nome citado com o cadastro real. Erros de runtime/config são LOGADOS e
-   * devolvidos como {erro:'falha_agente'} — o chamador cai no fallback regex.
+   * intenção normalizada {valor, tipo, descricao_limpa, categoria_nome,
+   * cartao_nome, parcelas, recorrente} ou {erro} quando não é um lançamento.
+   * As listas de cartões E de categorias vão no prompt ("cartoes_disponiveis" e
+   * "categorias_disponiveis") — o agente escolhe entre nomes EXISTENTES, e o
+   * hook revalida no banco antes de gravar. Erros de runtime/config são
+   * LOGADOS e devolvidos como {erro:'falha_agente'}.
    */
-  function interpretarComAgente(texto, nomesCartoes, userId) {
+  function interpretarComAgente(texto, nomesCartoes, nomesCategorias, userId) {
     const prompt =
       'Mensagem do usuário: ' +
       JSON.stringify(String(texto || '')) +
       '\n' +
       'cartoes_disponiveis: ' +
-      JSON.stringify(nomesCartoes || [])
+      JSON.stringify(nomesCartoes || []) +
+      '\n' +
+      'categorias_disponiveis: ' +
+      JSON.stringify(nomesCategorias || [])
     let resposta = ''
     try {
       // O runtime do agente EXIGE user_id real (id de um registro de users) —
@@ -450,9 +462,10 @@ routerAdd('POST', '/backend/v1/whatsapp/webhook', (c) => {
     const intento = {
       valor: isFinite(valor) && valor > 0 ? valor : 0,
       tipo: parsed.tipo === 'entrada' ? 'receita' : parsed.tipo === 'saida' ? 'despesa' : '',
-      descricao_essencial: String(parsed.descricao_essencial || '')
+      descricao_essencial: String(parsed.descricao_limpa || parsed.descricao_essencial || '')
         .trim()
         .substring(0, 120),
+      categoria_nome: String(parsed.categoria_nome || '').trim(),
       cartao_nome: parsed.cartao_nome ? String(parsed.cartao_nome).trim() : '',
       parcelas:
         isFinite(parcelasRaw) && parcelasRaw >= 2 && parcelasRaw <= MAX_PARCELAS ? parcelasRaw : 0,
@@ -466,24 +479,18 @@ routerAdd('POST', '/backend/v1/whatsapp/webhook', (c) => {
   }
 
   /**
-   * Interpretação completa: tenta o regex; se falhar OU se houver menção a
-   * cartão (para deixar a IA casar o nome), chama o agente. Se o agente
-   * também falhar, cai de volta no regex puro (fallback total).
+   * Interpretação completa: SEMPRE aciona o agente de IA (o regex só sobrevive
+   * como fallback quando o agente falha). O agente devolve descrição limpa
+   * (só o item, sem verbo/artigo) e a categoria mais adequada, escolhida
+   * entre as categorias REAIS do usuário (próprias + padrões). Se o agente
+   * cair, o caminho antigo por regex continua valendo (descrição enxugada e
+   * categoria por match de texto → fallback).
    */
   function interpretarMensagem(usuario, msg) {
     const texto = String(msg.texto || '')
     const interpretado = interpretarTexto(texto)
 
-    // Regex não extraiu tudo (sem valor/tipo) OU o texto menciona cartão
-    // (a palavra "cartão" OU o nome de um cartão cadastrado): dou a chance ao
-    // agente de casar o cartão e devolver a descrição essencial limpa
-    // (inclui "com cartão xp", "no nubank" etc.).
-    const semTipo = !interpretado || interpretado.tipo === 'duvida'
-    const falaDeCartao =
-      /\bcartao\b/.test(semAcento(texto.toLowerCase())) || !!cartaoPorTexto(usuario.id, texto)
-    if (!semTipo && !falaDeCartao) return interpretado
-
-    console.log('[whatsapp_webhook] regex insuficiente, aciono agente IA:', texto)
+    console.log('[whatsapp_webhook] aciono agente IA para:', texto)
 
     let nomes = []
     try {
@@ -495,8 +502,19 @@ routerAdd('POST', '/backend/v1/whatsapp/webhook', (c) => {
     } catch (_) {
       nomes = []
     }
+    // Tipo provisório (o regex sabe dizer entrada/saída; sem valor, assumo
+    // despesa para montar a lista de categorias — validada de novo na gravação).
+    const tipoProv = interpretado && interpretado.tipo === 'receita' ? 'receita' : 'despesa'
+    const catRecords = listarCategorias(usuario.id, tipoProv)
 
-    const intento = interpretarComAgente(texto, nomes, usuario.id)
+    const intento = interpretarComAgente(
+      texto,
+      nomes,
+      catRecords.map(function (r) {
+        return r.getString('nome')
+      }),
+      usuario.id,
+    )
     if (intento.erro) {
       if (intento.erro === 'sem_valor' || intento.erro === 'nao_lancamento') {
         console.log('[whatsapp_webhook] agente disse que não é lançamento:', intento.erro)
@@ -506,9 +524,18 @@ routerAdd('POST', '/backend/v1/whatsapp/webhook', (c) => {
       return interpretado
     }
 
-    // Sucesso: resolvo o cartão pelo NOME que o agente devolveu (não pelo
-    // texto bruto) e gravo a descrição LIMPA retornada pelo agente.
+    // Sucesso: descrição LIMPA (só o item) e categoria escolhida pela IA,
+    // revalidada contra o banco (nome exato da coleção categorias).
     msg.descricaoFinal = intento.descricao_essencial || descrever(texto)
+    msg.categoriaId = intento.categoria_nome
+      ? categoriaPorNome(catRecords, intento.categoria_nome)
+      : null
+    if (intento.categoria_nome && !msg.categoriaId) {
+      console.log(
+        '[whatsapp_webhook] categoria devolvida pela IA não casou com o cadastro:',
+        intento.categoria_nome,
+      )
+    }
     let cartaoAgente = null
     if (intento.cartao_nome) {
       cartaoAgente =
@@ -577,9 +604,11 @@ routerAdd('POST', '/backend/v1/whatsapp/webhook', (c) => {
    * serie_id/parcela_numero/parcela_total); recorrente grava com
    * recorrente=true e recorrencia_periodo='mensal' (a réplica virtual dos
    * meses seguintes é feita na leitura pelo extrato). descricaoOverride é a
-   * descrição LIMPA vinda do agente (só a essência, ex. "mercado").
+   * descrição LIMPA vinda do agente (só o item, ex. "calcinha") e
+   * categoriaOverride a categoria escolhida pela IA e validada no banco
+   * (quando nenhuma casou: match por texto no caminho antigo → fallback).
    */
-  function gravarTransacao(usuario, texto, intento, cartao, descricaoOverride) {
+  function gravarTransacao(usuario, texto, intento, cartao, descricaoOverride, categoriaOverride) {
     const hoje = new Date().toISOString().replace('T', ' ').substring(0, 19) + 'Z'
     const transacao = new Record($app.findCollectionByNameOrId('transacoes'))
     transacao.set('user_id', usuario.id)
@@ -603,6 +632,7 @@ routerAdd('POST', '/backend/v1/whatsapp/webhook', (c) => {
     }
 
     const cat =
+      categoriaOverride ||
       categoriaPorTexto(usuario.id, intento.tipo, texto) ||
       categoriaFallback(usuario.id, intento.tipo)
     if (cat) transacao.set('categoria_id', cat.id)
@@ -936,6 +966,7 @@ routerAdd('POST', '/backend/v1/whatsapp/webhook', (c) => {
           parcelas: interpretado.parcelas,
           recorrente: interpretado.recorrente,
           descricao: msg.descricaoFinal || descrever(msg.texto),
+          categoria: msg.categoriaId,
         })
         registrarMensagem(msg, usuario.id, 'pendente', '')
         responderWhatsApp(
@@ -962,6 +993,7 @@ routerAdd('POST', '/backend/v1/whatsapp/webhook', (c) => {
           parcelas: interpretado.parcelas,
           recorrente: interpretado.recorrente,
           descricao: msg.descricaoFinal || descrever(msg.texto),
+          categoria: msg.categoriaId,
         })
         registrarMensagem(msg, usuario.id, 'pendente', '')
         responderWhatsApp(
@@ -980,6 +1012,7 @@ routerAdd('POST', '/backend/v1/whatsapp/webhook', (c) => {
           parcelas: interpretado.parcelas,
           recorrente: interpretado.recorrente,
           descricao: msg.descricaoFinal || descrever(msg.texto),
+          categoria: msg.categoriaId,
         },
         cartao,
       )
@@ -1017,7 +1050,14 @@ routerAdd('POST', '/backend/v1/whatsapp/webhook', (c) => {
 
       let transacao = null
       try {
-        transacao = gravarTransacao(usuario, msg.texto, intento, cartao, dados.descricao)
+        transacao = gravarTransacao(
+          usuario,
+          msg.texto,
+          intento,
+          cartao,
+          dados.descricao,
+          dados.categoria,
+        )
         if (intento.parcelas > 1) {
           criarParcelasSeguintes(usuario, msg.texto, intento, cartao, transacao)
         }
