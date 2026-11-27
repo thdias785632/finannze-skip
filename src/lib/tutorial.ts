@@ -111,7 +111,8 @@ export const SECOES_TUTORIAL: SecaoTutorial[] = [
       '"Editar perfil" permite mudar nome, telefone e foto.',
       '"Tutorial" abre este guia, sempre atualizado com o seu plano.',
       '"Planos" mostra o que cada plano inclui e os preços.',
-      '"Contato" abre o WhatsApp do suporte (quando disponível) e "Sair" encerra a sessão.',
+      '"Contato" abre um modal com o WhatsApp do suporte e o e-mail contato@quitafy.com.br.',
+      '"Sair" encerra a sessão.',
     ],
   },
   // ---------------- Bronze ----------------
@@ -150,7 +151,7 @@ export const SECOES_TUTORIAL: SecaoTutorial[] = [
       'Escreva do jeito que você fala: "gastei 50 no uber", "paguei a faculdade 350" ou "recebi 1200 de freela".',
       'O bot confirma o que entendeu e pergunta o que falta antes de gravar (cartão, entrada ou saída).',
       'Funciona com despesas simples, em cartão, parceladas e recorrentes — e também com receitas.',
-      'O número do WhatsApp do Quitafy fica no menu do Usuário, clicando no seu icone e no item "Contato".',
+      'A integração pelo WhatsApp do plano Prata chega em breve — o número do suporte fica no menu do Usuário, item "Contato".',
     ],
   },
   // ---------------- Ouro ----------------

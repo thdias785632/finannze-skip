@@ -8,7 +8,7 @@
  * Respostas:
  *   200 { contato: "https://wa.me/5511999998888" }  — secret configurado
  *   200 { contato: null }                            — secret ausente/vazio
- *                                                  (o front ESCONDE a opção Contato)
+ *                                                  (o front usa o fallback padrão)
  *
  * O secret é lido com $os.getenv; set_env só injeta em runtime após novo
  * deploy_backend — se mudar o valor, redeploy do hook.

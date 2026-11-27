@@ -321,6 +321,16 @@ routerAdd('POST', '/backend/v1/assinatura/checkout', (c) => {
     const info = c.requestInfo()
     const plano = info.body && info.body.plano
     if (!PRECOS_CENTAVOS[plano]) return c.json(400, { error: 'Plano inválido' })
+    // O plano Prata está DESATIVADO por ora ("Em breve"): nenhuma assinatura
+    // nova pode ser criada, mesmo que alguém chame a rota por fora — a trava
+    // do frontend (card sem botão) não é segurança.
+    if (plano === 'prata') {
+      console.log('[assinaturas] checkout do prata negado (plano em breve):', auth.id)
+      return c.json(400, {
+        error:
+          'O plano Prata chega em breve! Ele ainda não está disponível para assinatura — por ora, conheça o Bronze e o Ouro.',
+      })
+    }
 
     const origem = (info.headers && (info.headers.origin || info.headers.Origin)) || ''
     const base = String(origem || '').replace(/\/$/, '')

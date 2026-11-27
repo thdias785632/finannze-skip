@@ -1,6 +1,14 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { UserRound, LogOut, MessageCircle, Pencil, Crown, GraduationCap } from 'lucide-react'
+import {
+  UserRound,
+  LogOut,
+  MessageCircle,
+  Pencil,
+  Crown,
+  GraduationCap,
+  CreditCard,
+} from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,35 +18,24 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { useAuth } from '@/context/AuthContext'
-import { useToast } from '@/hooks/use-toast'
-import { buscarUrlContato, urlAvatar } from '@/services/perfil'
+import { urlAvatar } from '@/services/perfil'
 import { EditarPerfilDialog } from '@/components/EditarPerfilDialog'
+import { ContatoModal } from '@/components/ContatoModal'
 import { NOME_PLANO } from '@/types/financial'
 
 /**
  * Item de perfil do usuário no header (no lugar do antigo botão "Sair").
  *
  * Mostra a foto de perfil quando existe (campo avatar do users) ou um ícone
- * cinza de usuário quando não tem. Abre o menu com Editar perfil, Contato
- * (só quando o secret WHATSAPP_CONTATO_URL está configurado no backend —
- * exposto pela rota pública /backend/v1/config/contato) e Sair.
+ * cinza de usuário quando não tem. Abre o menu com Editar perfil, Planos,
+ * Tutorial, Contato (modal com WhatsApp e e-mail) e Sair.
  */
 export const PerfilMenu: React.FC = () => {
   const navigate = useNavigate()
   const { user, logout } = useAuth()
 
-  const [urlContato, setUrlContato] = useState<string | null>(null)
   const [dialogEditar, setDialogEditar] = useState(false)
-
-  useEffect(() => {
-    let ativo = true
-    buscarUrlContato().then((url) => {
-      if (ativo) setUrlContato(url)
-    })
-    return () => {
-      ativo = false
-    }
-  }, [])
+  const [dialogContato, setDialogContato] = useState(false)
 
   const avatarUrl = user ? urlAvatar(user.avatar, user.id) : undefined
   const iniciais = (user?.name || user?.email || 'U')
@@ -87,23 +84,18 @@ export const PerfilMenu: React.FC = () => {
             <Pencil className="mr-2 h-4 w-4" />
             Editar perfil
           </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => navigate('/planos')}>
+            <CreditCard className="mr-2 h-4 w-4" />
+            Planos
+          </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => navigate('/tutorial')}>
             <GraduationCap className="mr-2 h-4 w-4" />
             Tutorial
           </DropdownMenuItem>
-          {urlContato ? (
-            <DropdownMenuItem asChild>
-              <a
-                href={urlContato}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="Contato pelo WhatsApp (abre em nova aba)"
-              >
-                <MessageCircle className="mr-2 h-4 w-4" />
-                Contato
-              </a>
-            </DropdownMenuItem>
-          ) : null}
+          <DropdownMenuItem onSelect={() => setDialogContato(true)}>
+            <MessageCircle className="mr-2 h-4 w-4" />
+            Contato
+          </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={sair} className="text-red-600 focus:text-red-700">
             <LogOut className="mr-2 h-4 w-4" />
@@ -113,6 +105,7 @@ export const PerfilMenu: React.FC = () => {
       </DropdownMenu>
 
       <EditarPerfilDialog open={dialogEditar} onOpenChange={setDialogEditar} />
+      <ContatoModal open={dialogContato} onOpenChange={setDialogContato} />
     </>
   )
 }

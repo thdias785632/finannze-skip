@@ -12,6 +12,7 @@ import {
   CreditCard,
   Loader2,
   PartyPopper,
+  Clock,
 } from 'lucide-react'
 import { PLANOS } from '@/lib/planos'
 import type { UserPlan } from '@/types/financial'
@@ -164,8 +165,14 @@ export const PlansPage: React.FC = () => {
     assinatura?.ativa && assinatura.plano ? (assinatura.plano as UserPlan) : null
   const acimaDoAtual = (id: UserPlan) => ORDEM.indexOf(id) > ORDEM.indexOf(planoAtual)
   const emConfirmacao = checkoutOk && !!sessionId
-  const podeAssinar = (id: UserPlan) =>
-    id !== 'basico' && acimaDoAtual(id) && planoAssinado !== id && !emConfirmacao && !planoEmAcao
+  const podeAssinar = (id: UserPlan) => {
+    const config = PLANOS.find((p) => p.id === id)
+    // Plano desativado ("Em breve") nunca mostra botão de assinar.
+    if (config && config.disponivel === false) return false
+    return (
+      id !== 'basico' && acimaDoAtual(id) && planoAssinado !== id && !emConfirmacao && !planoEmAcao
+    )
+  }
 
   return (
     <div className="min-h-screen bg-[#F5F3F7] pb-24">
@@ -210,11 +217,20 @@ export const PlansPage: React.FC = () => {
             const atual = plano.id === planoAtual
             const assinado = planoAssinado === plano.id
             const emAcao = planoEmAcao === plano.id || emConfirmacao
+            const emBreve = plano.disponivel === false
             return (
               <div
                 key={plano.id}
-                className={`rounded-3xl border p-5 ${plano.color} relative overflow-hidden`}
+                className={`rounded-3xl border p-5 ${plano.color} relative overflow-hidden ${
+                  emBreve ? 'opacity-60 saturate-50 pointer-events-none' : ''
+                }`}
+                aria-disabled={emBreve}
               >
+                {emBreve && (
+                  <span className="absolute top-0 right-0 z-10 flex items-center gap-1 rounded-bl-2xl bg-slate-500 px-3 py-1 text-[10px] font-bold text-white">
+                    <Clock className="w-3 h-3" /> Em breve
+                  </span>
+                )}
                 {plano.popular && !assinado && (
                   <span className="absolute top-0 right-0 rounded-bl-2xl bg-[#6639A6] px-3 py-1 text-[10px] font-bold text-white">
                     Mais popular
@@ -235,7 +251,14 @@ export const PlansPage: React.FC = () => {
                   {PLANO_ICONE[plano.id]}
                   <h2 className="text-lg font-black text-[#1F1438]">{plano.name}</h2>
                 </div>
-                <p className="text-xs text-gray-500 mt-0.5">{plano.tagline}</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {plano.tagline}
+                  {emBreve && (
+                    <span className="block mt-1 text-[11px] font-semibold text-slate-500">
+                      Disponível em breve — este plano ainda não pode ser assinado.
+                    </span>
+                  )}
+                </p>
 
                 <div className="mt-3 flex items-baseline gap-1">
                   <span className="text-2xl font-black text-[#4A247A]">{plano.price}</span>
@@ -361,7 +384,8 @@ export const PlansPage: React.FC = () => {
           <Crown className="w-4 h-4 text-[#6639A6] shrink-0 mt-0.5" />
           <p className="text-xs text-[#4A247A] leading-relaxed">
             Assine com cartão de crédito pelo checkout seguro do Stripe, em cobrança mensal. Para
-            alterar um plano à mão, fale com o administrador pelo menu Contato.
+            alterar um plano à mão, fale com o administrador pelo menu Contato. O plano Prata
+            (lançamentos pelo WhatsApp) chega em breve — por ora, só Básico, Bronze e Ouro.
           </p>
         </div>
       </div>

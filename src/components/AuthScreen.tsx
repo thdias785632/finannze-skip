@@ -310,8 +310,8 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
                 ))}
               </div>
               <p className="text-[10px] text-[#6B7280] mt-2.5 text-center leading-relaxed">
-                Ativação dos planos Bronze, Prata e Ouro feita pelo administrador — sem cobrança
-                automática no app.
+                Ativação dos planos Bronze e Ouro feita pelo administrador — sem cobrança automática
+                no app. O plano Prata (WhatsApp) chega em breve.
               </p>
             </div>
           )}

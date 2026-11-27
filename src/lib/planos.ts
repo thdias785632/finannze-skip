@@ -5,10 +5,14 @@ import type { UserPlan } from '@/types/financial'
  * tela de boas-vindas, pela AuthScreen e por qualquer surface futura.
  *
  * Hierarquia (cada plano inclui tudo do anterior):
- *   Básico (gratuito) → Bronze R$ 14,99 → Prata R$ 24,99 → Ouro R$ 29,99
+ *   Básico (gratuito) → Bronze R$ 14,99 → Ouro R$ 29,99
  *   - Bronze: despesas recorrentes + extratos de todos os meses (inclusive futuros)
- *   - Prata:  tudo do Bronze + lançamentos pelo WhatsApp
- *   - Ouro:   tudo do Prata + imóveis na planta com correção INCC
+ *   - Ouro:   tudo do Bronze + imóveis na planta com correção INCC
+ *
+ * O Prata (R$ 24,99, lançamentos pelo WhatsApp) está DESATIVADO por ora:
+ * `disponivel: false` — aparece na interface como "Em breve", sem botão de
+ * assinar, e o checkout dele é negado também no backend (assinaturas.pb.js).
+ * Nenhum plano ativo oferece WhatsApp como benefício.
  */
 export interface BeneficioPlano {
   title: string
@@ -25,6 +29,11 @@ export interface PlanoConfig {
   popular?: boolean
   color: string
   features: BeneficioPlano[]
+  /**
+   * false = plano ainda não comercializado ("Em breve"): a interface esmaece
+   * o card e o backend nega o checkout. Planos ativos não declaram o campo.
+   */
+  disponivel?: boolean
 }
 
 /** Helper: o plano atual é bronze, prata ou ouro? */
@@ -59,7 +68,6 @@ export const PLANOS: PlanoConfig[] = [
         included: false,
         reason: 'A partir do Bronze',
       },
-      { title: 'Lançamentos pelo WhatsApp', included: false, reason: 'A partir do Prata' },
       {
         title: 'Módulo de Imóveis na planta (INCC)',
         included: false,
@@ -80,7 +88,6 @@ export const PLANOS: PlanoConfig[] = [
       { title: 'Despesas e receitas recorrentes automáticas', included: true },
       { title: 'Visualização de extratos de meses futuros', included: true },
       { title: 'Previsão de fluxo de caixa', included: true },
-      { title: 'Lançamentos pelo WhatsApp', included: false, reason: 'A partir do Prata' },
       {
         title: 'Módulo de Imóveis na planta (INCC)',
         included: false,
@@ -95,6 +102,7 @@ export const PLANOS: PlanoConfig[] = [
     price: 'R$ 24,99',
     period: '/mês',
     color: 'border-slate-400 bg-gradient-to-b from-slate-50/60 to-white shadow-md',
+    disponivel: false,
     features: [
       { title: 'Tudo incluso nos planos Básico e Bronze', included: true },
       {
@@ -124,7 +132,7 @@ export const PLANOS: PlanoConfig[] = [
     period: '/mês',
     color: 'border-amber-400 bg-gradient-to-b from-amber-50/50 to-white shadow-lg',
     features: [
-      { title: 'Tudo incluso nos planos Básico, Bronze e Prata', included: true },
+      { title: 'Tudo incluso nos planos Básico e Bronze', included: true },
       { title: 'Módulo exclusivo de Imóveis na planta', included: true },
       { title: 'Correção pelo INCC oficial do Banco Central (SGS 192)', included: true },
       { title: 'Cálculo de defasagem e mês-base contratual', included: true },

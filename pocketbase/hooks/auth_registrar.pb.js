@@ -41,9 +41,9 @@ routerAdd('POST', '/backend/v1/auth/registrar', (c) => {
   }
 
   /**
-   * Envia o e-mail de boas-vindas (mesmo conteúdo do antigo hook
-   * signup_email.pb.js): remetente "Quitafy <no-reply@quitafy.com.br>",
-   * HTML + texto puro com os planos Básico / Bronze / Prata / Ouro. Best-effort.
+   * Envia o e-mail de boas-vindas: remetente "Quitafy <no-reply@quitafy.com.br>",
+   * HTML + texto puro com os planos ativos (Básico / Bronze / Ouro) e o Prata
+   * citado apenas como "em breve" (sem WhatsApp prometido para hoje). Best-effort.
    */
   function enviarBoasVindas(email, nome) {
     // Guia do plano Básico (espelha src/lib/tutorial.ts — fonte única no front;
@@ -110,7 +110,8 @@ routerAdd('POST', '/backend/v1/auth/registrar', (c) => {
           '"Editar perfil" permite mudar nome, telefone e foto.',
           '"Tutorial" abre este guia, sempre atualizado com o seu plano.',
           '"Planos" mostra o que cada plano inclui e os preços.',
-          '"Contato" abre o WhatsApp do suporte (quando disponível) e "Sair" encerra a sessão.',
+          '"Contato" abre o WhatsApp do suporte e o e-mail contato@quitafy.com.br.',
+          '"Sair" encerra a sessão.',
         ],
       },
     ]
@@ -151,8 +152,8 @@ routerAdd('POST', '/backend/v1/auth/registrar', (c) => {
       '  <p style="font-size:14px;line-height:1.6;margin:0 0 12px;">Além dele, temos:</p>',
       '  <ul style="font-size:14px;line-height:1.8;margin:0 0 12px;padding-left:20px;">',
       '    <li><strong>Bronze — R$ 14,99/mês</strong>: tudo do Básico + despesas e receitas recorrentes e extratos de todos os meses (inclusive futuros).</li>',
-      '    <li><strong>Prata — R$ 24,99/mês</strong>: tudo do Bronze + lançamentos pelo WhatsApp ("gastei 50 no uber" e pronto).</li>',
-      '    <li><strong>Ouro — R$ 29,99/mês</strong>: tudo do Prata + módulo de imóveis na planta com correção pelo INCC.</li>',
+      '    <li><strong>Ouro — R$ 29,99/mês</strong>: tudo do Bronze + módulo de imóveis na planta com correção pelo INCC.</li>',
+      '    <li><strong>Prata — R$ 24,99/mês (em breve)</strong>: lançamentos pelo WhatsApp — plano ainda não disponível.</li>',
       '  </ul>',
       '  <p style="font-size:14px;line-height:1.6;margin:0 0 16px;">',
       '    As informações e preços ficam na seção de <strong>Planos</strong>, dentro do app.',
@@ -192,8 +193,8 @@ routerAdd('POST', '/backend/v1/auth/registrar', (c) => {
       '',
       'Você começou sua jornada pelo plano Básico. Além dele, temos:',
       '- Bronze — R$ 14,99/mês: tudo do Básico + despesas e receitas recorrentes e extratos de todos os meses (inclusive futuros).',
-      '- Prata — R$ 24,99/mês: tudo do Bronze + lançamentos pelo WhatsApp ("gastei 50 no uber" e pronto).',
-      '- Ouro — R$ 29,99/mês: tudo do Prata + módulo de imóveis na planta com correção pelo INCC.',
+      '- Ouro — R$ 29,99/mês: tudo do Bronze + módulo de imóveis na planta com correção pelo INCC.',
+      '- Prata — R$ 24,99/mês (em breve): lançamentos pelo WhatsApp — plano ainda não disponível.',
       '',
       'As informações e preços ficam na seção de Planos, dentro do app.',
       '',

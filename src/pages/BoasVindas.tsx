@@ -86,7 +86,12 @@ export const BoasVindas: React.FC = () => {
                 key={plano.id}
                 className={`rounded-3xl border p-5 ${plano.color} relative overflow-hidden`}
               >
-                {atual && (
+                {plano.disponivel === false && (
+                  <span className="absolute top-0 right-0 rounded-bl-2xl bg-slate-500 px-3 py-1 text-[10px] font-bold text-white">
+                    Em breve
+                  </span>
+                )}
+                {atual && plano.disponivel !== false && (
                   <span className="absolute top-0 right-0 rounded-bl-2xl bg-emerald-600 px-3 py-1 text-[10px] font-bold text-white">
                     Seu plano
                   </span>
@@ -95,7 +100,14 @@ export const BoasVindas: React.FC = () => {
                   {PLANO_ICONE[plano.id]}
                   <h3 className="text-lg font-black text-[#1F1438]">{plano.name}</h3>
                 </div>
-                <p className="text-xs text-gray-500 mt-0.5">{plano.tagline}</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {plano.tagline}
+                  {plano.disponivel === false && (
+                    <span className="block mt-1 text-[11px] font-semibold text-slate-500">
+                      Disponível em breve — ainda não pode ser assinado.
+                    </span>
+                  )}
+                </p>
                 <div className="mt-3 flex items-baseline gap-1">
                   <span className="text-2xl font-black text-[#4A247A]">{plano.price}</span>
                   {plano.period && (
@@ -126,8 +138,8 @@ export const BoasVindas: React.FC = () => {
         </div>
 
         <p className="mt-6 text-center text-xs text-gray-500">
-          Ativação dos planos Bronze, Prata e Ouro feita pelo administrador — sem cobrança
-          automática no app.
+          Ativação dos planos Bronze e Ouro feita pelo administrador — sem cobrança automática no
+          app. O plano Prata (lançamentos pelo WhatsApp) chega em breve.
         </p>
 
         <h2 className="mt-8 mb-3 flex items-center gap-2 text-lg font-bold text-[#1F1235]">
