@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-27T01:35:59.356Z",
+  "generatedAt": "2026-11-27T02:02:59.905Z",
   "collections": [
     {
       "name": "users",
@@ -29,31 +29,21 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate"
-          ]
+          "autodateTriggers": ["onCreate"]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate",
-            "onUpdate"
-          ]
+          "autodateTriggers": ["onCreate", "onUpdate"]
         },
         {
           "name": "plan",
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": [
-            "basico",
-            "bronze",
-            "prata",
-            "ouro"
-          ]
+          "selectValues": ["basico", "bronze", "prata", "ouro"]
         },
         {
           "name": "telefone",
@@ -137,11 +127,7 @@
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": [
-            "receita",
-            "despesa",
-            "ambos"
-          ]
+          "selectValues": ["receita", "despesa", "ambos"]
         },
         {
           "name": "icone",
@@ -161,24 +147,17 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate"
-          ]
+          "autodateTriggers": ["onCreate"]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate",
-            "onUpdate"
-          ]
+          "autodateTriggers": ["onCreate", "onUpdate"]
         }
       ],
-      "indexes": [
-        "CREATE INDEX idx_categorias_user ON categorias (user_id)"
-      ]
+      "indexes": ["CREATE INDEX idx_categorias_user ON categorias (user_id)"]
     },
     {
       "name": "transacoes",
@@ -215,10 +194,7 @@
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": [
-            "receita",
-            "despesa"
-          ]
+          "selectValues": ["receita", "despesa"]
         },
         {
           "name": "data",
@@ -244,10 +220,7 @@
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": [
-            "mensal",
-            "anual"
-          ]
+          "selectValues": ["mensal", "anual"]
         },
         {
           "name": "pago",
@@ -260,19 +233,14 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate"
-          ]
+          "autodateTriggers": ["onCreate"]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate",
-            "onUpdate"
-          ]
+          "autodateTriggers": ["onCreate", "onUpdate"]
         },
         {
           "name": "cartao_id",
@@ -307,9 +275,7 @@
           "collectionRef": "users"
         }
       ],
-      "indexes": [
-        "CREATE INDEX idx_transacoes_user_data ON transacoes (user_id, data DESC)"
-      ]
+      "indexes": ["CREATE INDEX idx_transacoes_user_data ON transacoes (user_id, data DESC)"]
     },
     {
       "name": "imoveis",
@@ -382,19 +348,14 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate"
-          ]
+          "autodateTriggers": ["onCreate"]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate",
-            "onUpdate"
-          ]
+          "autodateTriggers": ["onCreate", "onUpdate"]
         },
         {
           "name": "data_chaves",
@@ -428,9 +389,7 @@
           "system": false
         }
       ],
-      "indexes": [
-        "CREATE INDEX idx_imoveis_user ON imoveis (user_id)"
-      ]
+      "indexes": ["CREATE INDEX idx_imoveis_user ON imoveis (user_id)"]
     },
     {
       "name": "indices_incc",
@@ -472,24 +431,17 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate"
-          ]
+          "autodateTriggers": ["onCreate"]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate",
-            "onUpdate"
-          ]
+          "autodateTriggers": ["onCreate", "onUpdate"]
         }
       ],
-      "indexes": [
-        "CREATE UNIQUE INDEX idx_indices_incc_mes ON indices_incc (mes)"
-      ]
+      "indexes": ["CREATE UNIQUE INDEX idx_indices_incc_mes ON indices_incc (mes)"]
     },
     {
       "name": "imovel_parcelas",
@@ -520,14 +472,7 @@
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": [
-            "entrada",
-            "mensal",
-            "intermediaria",
-            "chaves",
-            "financiamento",
-            "outro"
-          ]
+          "selectValues": ["entrada", "mensal", "intermediaria", "chaves", "financiamento", "outro"]
         },
         {
           "name": "valor_base",
@@ -570,24 +515,17 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate"
-          ]
+          "autodateTriggers": ["onCreate"]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate",
-            "onUpdate"
-          ]
+          "autodateTriggers": ["onCreate", "onUpdate"]
         }
       ],
-      "indexes": [
-        "CREATE INDEX idx_parcelas_imovel ON imovel_parcelas (imovel_id)"
-      ]
+      "indexes": ["CREATE INDEX idx_parcelas_imovel ON imovel_parcelas (imovel_id)"]
     },
     {
       "name": "cartoes",
@@ -630,19 +568,14 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate"
-          ]
+          "autodateTriggers": ["onCreate"]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate",
-            "onUpdate"
-          ]
+          "autodateTriggers": ["onCreate", "onUpdate"]
         },
         {
           "name": "fechamento_ajustado",
@@ -651,9 +584,7 @@
           "system": false
         }
       ],
-      "indexes": [
-        "CREATE INDEX idx_cartoes_user ON cartoes (user_id)"
-      ]
+      "indexes": ["CREATE INDEX idx_cartoes_user ON cartoes (user_id)"]
     },
     {
       "name": "imoveis_fluxos",
@@ -691,13 +622,7 @@
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": [
-            "entrada",
-            "sinal",
-            "anual",
-            "mensal",
-            "financiamento"
-          ]
+          "selectValues": ["entrada", "sinal", "anual", "mensal", "financiamento"]
         },
         {
           "name": "ordem",
@@ -716,19 +641,14 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate"
-          ]
+          "autodateTriggers": ["onCreate"]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate",
-            "onUpdate"
-          ]
+          "autodateTriggers": ["onCreate", "onUpdate"]
         }
       ],
       "indexes": [
@@ -796,19 +716,14 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate"
-          ]
+          "autodateTriggers": ["onCreate"]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate",
-            "onUpdate"
-          ]
+          "autodateTriggers": ["onCreate", "onUpdate"]
         }
       ],
       "indexes": [
@@ -845,24 +760,17 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate"
-          ]
+          "autodateTriggers": ["onCreate"]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate",
-            "onUpdate"
-          ]
+          "autodateTriggers": ["onCreate", "onUpdate"]
         }
       ],
-      "indexes": [
-        "CREATE INDEX idx_grupos_user ON grupos (user_id)"
-      ]
+      "indexes": ["CREATE INDEX idx_grupos_user ON grupos (user_id)"]
     },
     {
       "name": "grupos_membros",
@@ -906,39 +814,28 @@
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": [
-            "dono",
-            "membro"
-          ]
+          "selectValues": ["dono", "membro"]
         },
         {
           "name": "status",
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": [
-            "aceito",
-            "pendente"
-          ]
+          "selectValues": ["aceito", "pendente"]
         },
         {
           "name": "created",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate"
-          ]
+          "autodateTriggers": ["onCreate"]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate",
-            "onUpdate"
-          ]
+          "autodateTriggers": ["onCreate", "onUpdate"]
         }
       ],
       "indexes": [
@@ -982,19 +879,14 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate"
-          ]
+          "autodateTriggers": ["onCreate"]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate",
-            "onUpdate"
-          ]
+          "autodateTriggers": ["onCreate", "onUpdate"]
         }
       ],
       "indexes": [
@@ -1031,19 +923,14 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate"
-          ]
+          "autodateTriggers": ["onCreate"]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate",
-            "onUpdate"
-          ]
+          "autodateTriggers": ["onCreate", "onUpdate"]
         }
       ],
       "indexes": [
@@ -1115,19 +1002,14 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate"
-          ]
+          "autodateTriggers": ["onCreate"]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate",
-            "onUpdate"
-          ]
+          "autodateTriggers": ["onCreate", "onUpdate"]
         }
       ],
       "indexes": [
@@ -1164,10 +1046,7 @@
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": [
-            "cartao",
-            "tipo"
-          ]
+          "selectValues": ["cartao", "tipo"]
         },
         {
           "name": "dados",
@@ -1180,19 +1059,14 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate"
-          ]
+          "autodateTriggers": ["onCreate"]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate",
-            "onUpdate"
-          ]
+          "autodateTriggers": ["onCreate", "onUpdate"]
         }
       ],
       "indexes": [
