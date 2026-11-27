@@ -15,6 +15,7 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/hooks/use-toast'
 import { salvarPerfil, excluirConta, urlAvatar, type PerfilForm } from '@/services/perfil'
+import { formatarTelefoneBr, exibirTelefone, normalizarTelefoneComDdi } from '@/lib/telefone'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -53,7 +54,7 @@ export const EditarPerfilDialog: React.FC<Props> = ({ open, onOpenChange }) => {
   useEffect(() => {
     if (open && user) {
       setNome(user.name || '')
-      setTelefone(user.telefone || '')
+      setTelefone(exibirTelefone(user.telefone))
       setAvatar(null)
       setPreview(null)
       setRemoverAvatar(false)
@@ -84,17 +85,35 @@ export const EditarPerfilDialog: React.FC<Props> = ({ open, onOpenChange }) => {
       toast({ variant: 'destructive', title: 'Informe seu nome' })
       return
     }
+
+    // Telefone: mesmo contrato do cadastro — obrigatório, com DDI, normalizado
+    // para "+55DDDNUMERO" (é assim que o webhook do WhatsApp vincula a conta).
+    const telNormalizado = normalizarTelefoneComDdi(telefone)
+    if (!telNormalizado) {
+      toast({
+        variant: 'destructive',
+        title: 'Telefone inválido',
+        description: 'Informe um telefone válido com DDI, ex.: +55 (11) 99999-8888',
+      })
+      return
+    }
+
     setSalvando(true)
     try {
       const dados: PerfilForm = {
         nome: nome.trim(),
-        telefone: telefone.trim(),
+        telefone: telNormalizado,
         avatar,
         removerAvatar,
       }
       await salvarPerfil(user, dados)
       await refresh()
-      toast({ title: 'Perfil salvo', description: 'Suas informações foram atualizadas.' })
+      toast({
+        title: 'Perfil salvo',
+        description: telNormalizado
+          ? 'Suas informações foram atualizadas, inclusive o número para o WhatsApp.'
+          : 'Suas informações foram atualizadas.',
+      })
       onOpenChange(false)
     } catch (err) {
       toast({
@@ -204,18 +223,22 @@ export const EditarPerfilDialog: React.FC<Props> = ({ open, onOpenChange }) => {
               />
             </div>
 
-            {/* Telefone com DDI */}
+            {/* Telefone com DDI — mesmo formato do cadastro; vincula o WhatsApp */}
             <div className="space-y-1.5">
               <Label htmlFor="perfil-telefone">Telefone (com DDI)</Label>
               <Input
                 id="perfil-telefone"
                 type="tel"
+                inputMode="tel"
                 value={telefone}
-                onChange={(e) => setTelefone(e.target.value)}
+                onChange={(e) => setTelefone(formatarTelefoneBr(e.target.value))}
                 autoComplete="tel"
-                placeholder="+55 11 91234-5678"
+                placeholder="+55 (11) 99999-8888"
               />
-              <p className="text-xs text-[#6B7280]">Inclua o código do país, ex.: +55.</p>
+              <p className="text-xs text-[#6B7280]">
+                Use o número completo com DDI, igual ao do seu WhatsApp — é por ele que os
+                lançamentos enviados por mensagem são vinculados à sua conta.
+              </p>
             </div>
 
             {/* E-mail: só leitura */}

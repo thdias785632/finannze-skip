@@ -35,6 +35,54 @@ export interface PerfilForm {
   removerAvatar: boolean
 }
 
+/** Dígitos de um telefone (ex.: "+554391141968" → "554391141968"). */
+function digitos(telefone: string): string {
+  return telefone.replace(/\D/g, '')
+}
+
+/** Registro em whatsapp_contas do usuário (null = sem vínculo ainda). */
+async function contaWhatsapp(userId: string): Promise<{ id: string; numero: string } | null> {
+  try {
+    const rec = await pb.collection('whatsapp_contas').getFirstListItem(`user_id="${userId}"`)
+    return { id: rec.id, numero: String(rec.numero || '') }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Mantém o vínculo número → usuário usado pelo webhook do WhatsApp
+ * (coleção whatsapp_contas). Chamado sempre que o telefone do perfil muda:
+ * cria o vínculo se não existia, troca o número se mudou e NÃO apaga o
+ * vínculo se o telefone for limpo — desvincular pelo app poderia deixar
+ * lançamentos do WhatsApp sem dono.
+ */
+async function sincronizarContaWhatsapp(userId: string, telefone: string): Promise<void> {
+  const numero = digitos(telefone)
+  if (!numero) return
+
+  const atual = await contaWhatsapp(userId)
+
+  // O índice único de whatsapp_contas.numero não deixa o mesmo número em duas
+  // contas: detecto antes e devolvo uma mensagem que a pessoa entende.
+  try {
+    const dono = await pb.collection('whatsapp_contas').getFirstListItem(`numero="${numero}"`)
+    if (dono.user_id !== userId) {
+      throw new Error('Este número de WhatsApp já está vinculado a outra conta.')
+    }
+  } catch (err) {
+    if (err instanceof Error && err.message.includes('outra conta')) throw err
+  }
+
+  if (!atual) {
+    await pb.collection('whatsapp_contas').create({ numero, user_id: userId })
+    return
+  }
+  if (atual.numero !== numero) {
+    await pb.collection('whatsapp_contas').update(atual.id, { numero })
+  }
+}
+
 /** Atualiza o registro do usuário no PocketBase e devolve o User atualizado. */
 export async function salvarPerfil(user: User, dados: PerfilForm): Promise<User> {
   const corpo = new FormData()
@@ -47,6 +95,9 @@ export async function salvarPerfil(user: User, dados: PerfilForm): Promise<User>
 
   // Reautentica para o authStore guardar o registro novo (avatar/nome/telefone)
   await pb.collection('users').authRefresh()
+
+  // Vínculo do número para o webhook do WhatsApp (coleção whatsapp_contas).
+  await sincronizarContaWhatsapp(user.id, dados.telefone)
 
   return {
     id: rec.id,

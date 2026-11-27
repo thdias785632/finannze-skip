@@ -14,41 +14,11 @@ import {
 } from 'lucide-react'
 import { toast } from '@/hooks/use-toast'
 import { PLANOS } from '@/lib/planos'
+import { normalizarTelefoneComDdi, formatarTelefoneBr } from '@/lib/telefone'
 import { Crown, Check, Phone } from 'lucide-react'
 
 interface AuthScreenProps {
   onSuccess?: () => void
-}
-
-/** Normaliza um telefone brasileiro para "+DDI DDDNUMERO" (ex.: +55 11 99999-8888 → "+5511999998888"). */
-export function normalizarTelefoneComDdi(entrada: string): string | null {
-  const digitos = entrada.replace(/\D/g, '')
-  if (!digitos) return null
-  let ddi = '55'
-  let resto = digitos
-  if (digitos.startsWith('55') && digitos.length > 11) {
-    ddi = '55'
-    resto = digitos.slice(2)
-  } else if (digitos.length > 11) {
-    // DDI diferente de 55 informado com mais de 11 dígitos no total
-    return `+${digitos}`
-  }
-  if (resto.length < 10 || resto.length > 11) return null
-  return `+${ddi}${resto}`
-}
-
-/** Formata dígito a dígito enquanto o usuário digita (padrão Brasil com DDI). */
-function formatarTelefoneBr(input: string): string {
-  let d = input.replace(/\D/g, '')
-  if (d.startsWith('55')) d = d.slice(2)
-  d = d.slice(0, 11)
-  if (!d) return ''
-  const ddd = d.slice(0, 2)
-  const rest = d.slice(2)
-  let corpo = rest
-  if (rest.length > 8) corpo = `${rest.slice(0, 5)}-${rest.slice(5, 10)}`
-  else if (rest.length > 4) corpo = `${rest.slice(0, 4)}-${rest.slice(4)}`
-  return `+55 (${ddd}${corpo ? `) ${corpo}` : ''}`
 }
 
 export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
