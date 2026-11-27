@@ -40,18 +40,25 @@ export function formatarTelefoneBr(input: string): string {
 /**
  * Máscara que aceita o valor já salvo (ex.: "+554391141968" ou "+55 (43) 91141-968")
  * e devolve a forma exibida com pontuação. Usada para pré-preencher o campo.
+ * Cobre os dois tamanhos brasileiros: 13 dígitos (celular: 55 + DDD + 9 dígitos)
+ * e 12 dígitos (fixo/antigo: 55 + DDD + 8 dígitos).
  */
 export function exibirTelefone(entrada: string | undefined | null): string {
   if (!entrada) return ''
   if (/\D/.test(entrada)) return entrada // já tem pontuação: exibo como está
   const d = entrada.replace(/^\+/, '')
-  if (d.length < 10) return entrada
-  const ddi = d.length > 11 ? d.slice(0, d.length - 11) : '55'
-  const rest = d.slice(ddi.length === 2 && ddi === '55' ? 2 : ddi.length)
-  if (rest.length < 10 || rest.length > 11) return entrada
+  let rest: string
+  if (d.startsWith('55') && (d.length === 12 || d.length === 13)) {
+    rest = d.slice(2)
+  } else if (d.length === 10 || d.length === 11) {
+    // salvo sem DDI (não deveria acontecer): exibo mesmo assim como +55
+    rest = d
+  } else {
+    return entrada
+  }
   const ddd = rest.slice(0, 2)
   const num = rest.slice(2)
   const corpo =
     num.length > 8 ? `${num.slice(0, 5)}-${num.slice(5)}` : `${num.slice(0, 4)}-${num.slice(4)}`
-  return `+${ddi} (${ddd}) ${corpo}`
+  return `+55 (${ddd}) ${corpo}`
 }
