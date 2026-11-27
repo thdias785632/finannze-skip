@@ -305,6 +305,36 @@ routerAdd('POST', '/backend/v1/whatsapp/webhook', (c) => {
     return null
   }
 
+  /**
+   * PARECE DÚVIDA/PEDIDO? (não lançamento): pergunta sobre o app, saldos,
+   * planos, pedido de atendente etc. "atendente|humano|suporte" é sinal FORTE;
+   * os demais sinais só valem em mensagens SEM número de valor (uma despesa
+   * nunca é "comprei um queijo minas" por causa da palavra "quanto").
+   */
+  function pareceDuvida(texto) {
+    const t = semAcento(String(texto || '').toLowerCase())
+    if (!t) return false
+    // Sinal forte, com ou sem valor na mensagem.
+    if (
+      /atendente|humano|pessoa real|falar com alguem|suporte|cancelar (minha )?assinatura|cancelar (o )?plano/.test(
+        t,
+      )
+    ) {
+      return true
+    }
+    // Sem número = improvável ser lançamento; aí palavras de dúvida bastam.
+    if (!/\d/.test(t)) {
+      if (
+        /\bduvida|\bdavid\b|como (funciona|faco|faco para|posso)|onde (vejo|acho|esta)|o que e|quanto (gastei|passei)|nao consigo|nao funciona|erro|problema|ajuda\b/.test(
+          t,
+        )
+      ) {
+        return true
+      }
+    }
+    return false
+  }
+
   /** Interpreta o texto: valor, tipo (despesa/receita/duvida), parcelas, recorrente. */
   function interpretarTexto(texto) {
     const t = semAcento(
@@ -930,8 +960,146 @@ routerAdd('POST', '/backend/v1/whatsapp/webhook', (c) => {
       limparPendencia(msg.from)
     }
 
+    // ---- dúvida/pedido de atendente → agente de suporte, não lançamento ----
+    // (depois da trava de plano e antes do fluxo de lançamentos; a pendência
+    // aberta já foi tratada acima — resposta a pergunta do bot segue valendo)
+    if (pareceDuvida(msg.texto)) {
+      return tratarDuvida(usuario, msg)
+    }
+
     // ---- mensagem nova ----
     return processarNovaMensagem(usuario, msg, interpretarMensagem(usuario, msg))
+
+    /**
+     * Dúvida/pedido de atendente: chama o agente nativo 'quitafy-suporte'
+     * (stateless, o contexto vai no prompt), responde no WhatsApp e, se o
+     * agente escalonar, abre atendimento + notifica o dono (WhatsApp → e-mail
+     * de segunda via). Envio e e-mail com helpers duplicados inline (JSVM não
+     * compartilha topo entre callbacks).
+     */
+    function tratarDuvida(usuario, msg) {
+      let resposta = ''
+      let escalonar = false
+      let motivo = ''
+      try {
+        const result = $ai.agent('quitafy-suporte').chat({
+          user_id: usuario.id,
+          message:
+            'Mensagem do cliente pelo WhatsApp: ' +
+            JSON.stringify(msg.texto) +
+            '\nResponda em português, curto (o WhatsApp não formata markdown). ' +
+            'Se NÃO souber ou for algo que exige atenção humana, responda SOMENTE com JSON ' +
+            '{"escalonar":true,"motivo":"..."} — nesse caso a conversa vira um atendimento humano.',
+        })
+        resposta = String((result && result.content) || '')
+      } catch (err) {
+        console.error('[whatsapp_webhook] agente de suporte falhou:', (err && err.message) || err)
+      }
+
+      // Escalonamento: JSON {escalonar:true,motivo} (puro ou embutido no texto).
+      try {
+        const ini = resposta.indexOf('{')
+        const fim = resposta.lastIndexOf('}')
+        if (ini !== -1 && fim > ini) {
+          const parsed = JSON.parse(resposta.substring(ini, fim + 1))
+          if (parsed && (parsed.escalonar === true || parsed.escalate === true)) {
+            escalonar = true
+            motivo = String(parsed.motivo || parsed.reason || '')
+            resposta = String(parsed.mensagem_ao_cliente || '')
+          }
+        }
+      } catch (_) {
+        /* resposta normal de texto */
+      }
+
+      registrarMensagem(msg, usuario.id, escalonar ? 'escalonada' : 'duvida', '')
+
+      if (!resposta) {
+        resposta =
+          'Não consegui responder agora, mas vou passar sua dúvida para o time. ' +
+          'Alguém do suporte te responde por aqui mesmo, ok?'
+        escalonar = true
+        motivo = motivo || 'Agente de IA sem resposta'
+      }
+
+      responderWhatsApp(msg.from, resposta)
+
+      if (escalonar) {
+        try {
+          const at = new Record($app.findCollectionByNameOrId('atendimentos'))
+          at.set('user_id', usuario.id)
+          at.set('status', 'aberto')
+          at.set('canal', 'whatsapp')
+          at.set('assunto', String(msg.texto || '').substring(0, 200))
+          at.set('motivo_escalonamento', String(motivo || '').substring(0, 500))
+          $app.save(at)
+          const m1 = new Record($app.findCollectionByNameOrId('atendimentos_mensagens'))
+          m1.set('atendimento_id', at.id)
+          m1.set('autor_id', usuario.id)
+          m1.set('autor_papel', 'cliente')
+          m1.set('texto', String(msg.texto || '').substring(0, 4000))
+          $app.save(m1)
+          console.log('[whatsapp_webhook] atendimento criado:', at.id)
+        } catch (err) {
+          console.error(
+            '[whatsapp_webhook] falha ao abrir atendimento:',
+            (err && err.message) || err,
+          )
+          return c.json(200, { received: true, escalonada: false, erro_atendimento: true })
+        }
+
+        // Notificação do dono: WhatsApp primeiro; falhou → e-mail (2ª via).
+        const DONO_NUMERO = (function lerSecret(nome, def) {
+          try {
+            if ($secrets.has(nome)) return $secrets.get(nome) || def
+          } catch (_) {}
+          try {
+            return $os.getenv(nome) || def
+          } catch (_) {
+            return def
+          }
+        })('WHATSAPP_DONO_NUMERO', '5511993216607')
+        const nomeCliente = usuario.getString('name') || usuario.getString('email')
+        const aviso =
+          '🔔 Quitafy: novo atendimento que precisa de você.\n\n' +
+          'Cliente: ' +
+          nomeCliente +
+          '\n' +
+          'Assunto: ' +
+          String(msg.texto || '').substring(0, 300) +
+          '\n\n' +
+          'Responda na tela Atendimentos do app (visível só para admin).'
+        const okWhats = responderWhatsApp(DONO_NUMERO, aviso)
+
+        if (!okWhats) {
+          console.log('[whatsapp_webhook] WhatsApp do dono falhou — envio e-mail de segunda via')
+          try {
+            const admin = $app.findFirstRecordByFilter('users', 'is_admin = true')
+            const emailAdmin = admin.getString('email')
+            const mensagem = new MailerMessage({
+              from: { address: 'no-reply@quitafy.com.br', name: 'Quitafy' },
+              to: [{ address: emailAdmin }],
+              subject: 'Quitafy — novo atendimento de ' + nomeCliente,
+              text:
+                'Um cliente abriu um atendimento no Quitafy:\n\nCliente: ' +
+                nomeCliente +
+                '\nAssunto: ' +
+                String(msg.texto || '').substring(0, 800) +
+                '\n\nResponda na tela Atendimentos do app.',
+            })
+            $app.newMailClient().send(mensagem)
+            console.log('[whatsapp_webhook] e-mail de escalonamento enviado para', emailAdmin)
+          } catch (mailErr) {
+            console.error(
+              '[whatsapp_webhook] falha também no e-mail ao dono:',
+              (mailErr && mailErr.message) || mailErr,
+            )
+          }
+        }
+      }
+
+      return c.json(200, { received: true, duvida: true, escalonada: escalonar })
+    }
 
     /**
      * Trata uma mensagem nova (não é resposta a pendência): interpreta

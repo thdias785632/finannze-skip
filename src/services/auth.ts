@@ -14,6 +14,7 @@ export const authService = {
       plan: (rec.plan as UserPlan) || 'basico',
       telefone: (rec.telefone as string) || undefined,
       avatar: rec.avatar as string | undefined,
+      is_admin: rec.is_admin === true,
       created: rec.created,
       updated: rec.updated,
     }
@@ -46,6 +47,7 @@ export const authService = {
       plan: (rec.plan as UserPlan) || 'basico',
       telefone: (rec.telefone as string) || undefined,
       avatar: rec.avatar as string | undefined,
+      is_admin: rec.is_admin === true,
       created: rec.created,
       updated: rec.updated,
     }
@@ -105,6 +107,7 @@ export const authService = {
         plan: (rec.record.plan as UserPlan) || 'basico',
         telefone: (rec.record.telefone as string) || undefined,
         avatar: rec.record.avatar as string | undefined,
+        is_admin: rec.record.is_admin === true,
         created: rec.record.created,
         updated: rec.record.updated,
       }

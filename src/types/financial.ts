@@ -15,6 +15,8 @@ export interface User {
   plan: UserPlan
   telefone?: string
   avatar?: string
+  /** true quando o usuário é o administrador do app (donos do suporte). */
+  is_admin?: boolean
   created: string
   updated: string
 }

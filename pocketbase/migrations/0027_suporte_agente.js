@@ -17,15 +17,29 @@
  *      antigo do app.
  *
  * Idempotente: tudo é checado antes de criar/alterar — reexecutar não duplica.
+ *
+ * IMPORTANTE (JSVM): findCollectionByNameOrId LANÇA "sql: no rows in result
+ * set" quando não existe — por isso toda existência é checada com try/catch
+ * (helper local existeColecao) e nunca com if (find...(...)).
  */
 migrate(
   (app) => {
+    function existeColecao(nome) {
+      try {
+        app.findCollectionByNameOrId(nome)
+        return true
+      } catch (_) {
+        return false
+      }
+    }
+
     // ---------- 1) users.is_admin ----------
+    // ATENÇÃO: fields.getByName retorna null (não lança) quando o campo não
+    // existe — checar o valor, não só a exceção.
     const users = app.findCollectionByNameOrId('users')
     let temAdmin = false
     try {
-      users.fields.getByName('is_admin')
-      temAdmin = true
+      temAdmin = !!users.fields.getByName('is_admin')
     } catch (_) {
       temAdmin = false
     }
@@ -36,7 +50,7 @@ migrate(
     }
 
     // ---------- 2) coleção atendimentos ----------
-    if (!app.findCollectionByNameOrId('atendimentos')) {
+    if (!existeColecao('atendimentos')) {
       const at = new Collection({
         name: 'atendimentos',
         type: 'base',
@@ -81,7 +95,7 @@ migrate(
 
     // ---------- 3) coleção atendimentos_mensagens ----------
     const at = app.findCollectionByNameOrId('atendimentos')
-    if (!app.findCollectionByNameOrId('atendimentos_mensagens')) {
+    if (!existeColecao('atendimentos_mensagens')) {
       const msg = new Collection({
         name: 'atendimentos_mensagens',
         type: 'base',
@@ -195,24 +209,28 @@ migrate(
       let dono = null
       // Caminho principal: número do WhatsApp do dono na coleção whatsapp_contas.
       try {
-        const conta = app.findFirstRecordByFilter('whatsapp_contas', `numero = '${ADMIN_TELEFONE}'`)
-        dono = app.findRecordById('users', conta.getString('user_id'))
+        const contas = app.findRecordsByFilter(
+          'whatsapp_contas',
+          `numero = '${ADMIN_TELEFONE}'`,
+          '',
+          1,
+          0,
+        )
+        if (contas.length > 0) dono = app.findRecordById('users', contas[0].getString('user_id'))
       } catch (_) {
         dono = null
       }
-      // Fallback: número com 9 dígito extra (número antigo conhecido do dono).
+      // Fallback: número contendo os dígitos locais (DDD + telefone).
       if (!dono) {
         try {
-          const contas = $app.findRecordsByFilter(
+          const contas = app.findRecordsByFilter(
             'whatsapp_contas',
             `numero ~ '${ADMIN_TELEFONE.slice(2)}'`,
             'created',
             1,
             0,
           )
-          if (contas.length > 0) {
-            dono = app.findRecordById('users', contas[0].getString('user_id'))
-          }
+          if (contas.length > 0) dono = app.findRecordById('users', contas[0].getString('user_id'))
         } catch (_) {
           dono = null
         }

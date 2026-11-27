@@ -1,111 +1,120 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import {
-  UserRound,
-  LogOut,
-  MessageCircle,
-  Pencil,
-  Crown,
-  GraduationCap,
-  CreditCard,
-} from 'lucide-react'
+import { Bot, HelpCircle, LogOut, Pencil, UserRoundCheck, LifeBuoy } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Switch } from '@/components/ui/switch'
 import { useAuth } from '@/context/AuthContext'
-import { urlAvatar } from '@/services/perfil'
+import { useVerComoCliente } from '@/context/VerComoClienteContext'
 import { EditarPerfilDialog } from '@/components/EditarPerfilDialog'
 import { ContatoModal } from '@/components/ContatoModal'
-import { NOME_PLANO } from '@/types/financial'
+import { urlAvatar } from '@/services/perfil'
 
 /**
- * Item de perfil do usuário no header (no lugar do antigo botão "Sair").
- *
- * Mostra a foto de perfil quando existe (campo avatar do users) ou um ícone
- * cinza de usuário quando não tem. Abre o menu com Editar perfil, Planos,
- * Tutorial, Contato (modal com WhatsApp e e-mail) e Sair.
+ * Menu do perfil no header: editar perfil, ajuda (agente de suporte),
+ * atendimentos (SÓ admin, e some no modo "ver como cliente"), toggle
+ * "Ver como cliente" (admin), contato e sair.
  */
-export const PerfilMenu: React.FC = () => {
-  const navigate = useNavigate()
+export function PerfilMenu() {
   const { user, logout } = useAuth()
+  const { verComoCliente, alternar } = useVerComoCliente()
+  const navigate = useNavigate()
+  const [abrirEditar, setAbrirEditar] = useState(false)
+  const [abrirContato, setAbrirContato] = useState(false)
 
-  const [dialogEditar, setDialogEditar] = useState(false)
-  const [dialogContato, setDialogContato] = useState(false)
-
-  const avatarUrl = user ? urlAvatar(user.avatar, user.id) : undefined
-  const iniciais = (user?.name || user?.email || 'U')
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase())
-    .join('')
-
-  const sair = async () => {
-    await logout()
-    // A tela de login é a própria rota "/" (Index renderiza AuthScreen sem sessão);
-    // "/login" não existe no roteador e caía na página 404.
-    navigate('/', { replace: true })
-  }
+  const isAdmin = !!user?.is_admin
 
   return (
     <>
       <DropdownMenu>
-        <DropdownMenuTrigger
-          aria-label="Abrir menu do perfil"
-          className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[#6639A6] focus-visible:ring-offset-2"
-        >
-          <Avatar className="h-9 w-9 border border-[#E2D6F0]">
-            {avatarUrl ? (
-              <AvatarImage src={avatarUrl} alt={`Foto de perfil de ${user?.name || 'usuário'}`} />
-            ) : null}
-            <AvatarFallback className="bg-[#EFEBF6] text-[#8B8B9E]">
-              {iniciais || <UserRound className="h-5 w-5 text-[#8B8B9E]" strokeWidth={1.8} />}
-            </AvatarFallback>
-          </Avatar>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            aria-label="Abrir menu do perfil"
+            className="ml-auto rounded-full focus-visible:ring-2 focus-visible:ring-[#6639A6] focus-visible:ring-offset-2 focus-visible:outline-none"
+          >
+            <Avatar className="h-9 w-9 border-2 border-white/40">
+              {user?.avatar ? (
+                <AvatarImage
+                  src={urlAvatar(user.avatar, user.id) || ''}
+                  alt={`Foto de ${user.name || 'perfil'}`}
+                />
+              ) : null}
+              <AvatarFallback className="bg-[#F1EAF9] text-sm font-bold text-[#6639A6]">
+                {(user?.name || user?.email || '?').charAt(0).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+          </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" sideOffset={8} className="w-56">
-          <div className="px-3 py-2">
-            <p className="text-sm font-semibold text-[#1F1438] truncate">
-              {user?.name || 'Usuário'}
-            </p>
-            <p className="text-xs text-[#6B7280] truncate">{user?.email}</p>
-            <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-[#F1EAF9] px-2 py-0.5 text-[10px] font-bold text-[#6639A6]">
-              <Crown className="h-3 w-3" />
-              Plano {NOME_PLANO[user?.plan || 'basico']}
-            </span>
-          </div>
+
+        <DropdownMenuContent align="end" className="w-60">
+          <DropdownMenuLabel className="truncate">
+            {user?.name || user?.email}
+            {isAdmin && !verComoCliente && (
+              <span className="ml-1 rounded bg-[#F1EAF9] px-1.5 py-0.5 text-[10px] font-bold uppercase text-[#6639A6]">
+                Admin
+              </span>
+            )}
+          </DropdownMenuLabel>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => setDialogEditar(true)}>
-            <Pencil className="mr-2 h-4 w-4" />
-            Editar perfil
+
+          <DropdownMenuItem onSelect={() => setAbrirEditar(true)}>
+            <Pencil className="mr-2 h-4 w-4" /> Editar perfil
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => navigate('/planos')}>
-            <CreditCard className="mr-2 h-4 w-4" />
-            Planos
+
+          <DropdownMenuItem onSelect={() => navigate('/ajuda')}>
+            <LifeBuoy className="mr-2 h-4 w-4" /> Ajuda
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => navigate('/tutorial')}>
-            <GraduationCap className="mr-2 h-4 w-4" />
-            Tutorial
+
+          {isAdmin && !verComoCliente && (
+            <DropdownMenuItem onSelect={() => navigate('/atendimentos')}>
+              <Bot className="mr-2 h-4 w-4" /> Atendimentos
+            </DropdownMenuItem>
+          )}
+
+          {isAdmin && (
+            <div
+              className="flex items-center justify-between gap-2 px-2 py-1.5 text-sm"
+              role="group"
+              aria-label="Modo de visualização"
+            >
+              <span className="flex items-center gap-2 text-[#1F1438]">
+                <UserRoundCheck className="h-4 w-4 text-[#6639A6]" aria-hidden="true" />
+                Ver como cliente
+              </span>
+              <Switch
+                checked={verComoCliente}
+                onCheckedChange={alternar}
+                aria-label="Ver o app como cliente (esconde os itens de admin)"
+              />
+            </div>
+          )}
+
+          <DropdownMenuItem onSelect={() => setAbrirContato(true)}>
+            <HelpCircle className="mr-2 h-4 w-4" /> Contato
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => setDialogContato(true)}>
-            <MessageCircle className="mr-2 h-4 w-4" />
-            Contato
-          </DropdownMenuItem>
+
           <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={sair} className="text-red-600 focus:text-red-700">
-            <LogOut className="mr-2 h-4 w-4" />
-            Sair
+          <DropdownMenuItem
+            onSelect={() => {
+              alternar(false)
+              logout()
+            }}
+          >
+            <LogOut className="mr-2 h-4 w-4" /> Sair
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <EditarPerfilDialog open={dialogEditar} onOpenChange={setDialogEditar} />
-      <ContatoModal open={dialogContato} onOpenChange={setDialogContato} />
+      <EditarPerfilDialog open={abrirEditar} onOpenChange={setAbrirEditar} />
+      <ContatoModal open={abrirContato} onOpenChange={setAbrirContato} />
     </>
   )
 }

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-27T02:02:59.905Z",
+  "generatedAt": "2026-11-27T02:08:33.627Z",
   "collections": [
     {
       "name": "users",
@@ -8,7 +8,7 @@
         "list": "id = @request.auth.id",
         "view": "id = @request.auth.id",
         "create": "",
-        "update": "@request.auth.id != '' && id = @request.auth.id && @request.body.plan:changed = false",
+        "update": "@request.auth.id != '' && id = @request.auth.id && @request.body.plan:changed = false && @request.body.is_admin:changed = false",
         "delete": "id = @request.auth.id"
       },
       "fields": [
@@ -90,6 +90,12 @@
         {
           "name": "stripe_inicio",
           "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "is_admin",
+          "type": "bool",
           "required": false,
           "system": false
         }
@@ -1073,6 +1079,90 @@
         "CREATE UNIQUE INDEX idx_wp_numero ON whatsapp_pendencias (numero)",
         "CREATE INDEX idx_wp_created ON whatsapp_pendencias (created)"
       ]
+    },
+    {
+      "name": "atendimentos",
+      "type": "base",
+      "apiRules": {
+        "list": null,
+        "view": null,
+        "create": null,
+        "update": null,
+        "delete": null
+      },
+      "fields": [
+        {
+          "name": "usuario",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["aberto", "em_atendimento", "resolvido"]
+        },
+        {
+          "name": "origem",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["app", "whatsapp"]
+        },
+        {
+          "name": "assunto",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "resumo",
+          "type": "text",
+          "required": false,
+          "system": false
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_atend_usuario ON atendimentos (usuario)",
+        "CREATE INDEX idx_atend_status ON atendimentos (status)"
+      ]
+    },
+    {
+      "name": "atendimentos_mensagens",
+      "type": "base",
+      "apiRules": {
+        "list": null,
+        "view": null,
+        "create": null,
+        "update": null,
+        "delete": null
+      },
+      "fields": [
+        {
+          "name": "atendimento",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "atendimentos"
+        },
+        {
+          "name": "autor",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["cliente", "admin", "agente"]
+        },
+        {
+          "name": "texto",
+          "type": "text",
+          "required": true,
+          "system": false
+        }
+      ],
+      "indexes": ["CREATE INDEX idx_atendmsg_atendimento ON atendimentos_mensagens (atendimento)"]
     }
   ]
 }
